@@ -1,0 +1,1268 @@
+//*****************************************************************************************************************
+// File: Stomata_Detection_JZ.script
+//
+// Version: 2.17
+//				The Sainsbury Laboratory, Norwich Research Park
+//				Dr. Ji Zhou					
+//email: 	ji.zhou@tsl.ac.uk		
+//
+//	
+//  Description: Updated the calcualtion of inner layer area, outter layer detection, and 
+//					  small stomata detection. Added output outer layer length and the inner layer length.
+//					  Most importantly, the inner pore detection has been refined.
+//					  Detect stomata clustering - for all stomata as well as small stomata
+//					  Added many expectional cases in order to get rid of singular objects 
+//
+//	Updated for the New Opera Operating System 
+//
+//  Copyright:   (C) The Sainsbury Laboratory
+//
+//*****************************************************************************************************************
+
+//set up the user input form....
+input(StackNo, 0, "Stack No", "i", "Number of the stacks to analyze. If set to 0 all stacks are evaluated.")
+input(ZplanesInStack, 25,"Zplanes in stack (per channel) ","i","Number of z-planes in stack (for each channel), a number of time moments in kinetic measurement")
+input(CameraNo, 1, "Camera No", "i", "How many cameras have been used in the experiment")
+input(IN_startPlane, 1,"StartPlane for Projection","i","Plane counting starts with the value 1. The specified Start Plane will be included in the projection.")
+input(IN_endPlane, 25,"EndPlane for Projection","i","Plane counting starts with the value 21. The specified End Plane will be included in the projection.")
+input(ValidPercent, 25, "Valid Image Area", "i", "Specify percentage points of the valid image area - e.g. enter 50 means that if over 50% of the image does not contain valid image information the image will be discarded")
+input(ShowIllustrations, YES, "Show Illustrations", "y", "YES- Output illustrations are depicted. No- Output illustrations are not shown.")
+input(Output_Stomata_IDX, YES, "Show Stomata Indices", "y", "YES- Output an image that contains stomata indices. No- No stomata indices will be shown.")
+input(Output_Stomata_Cluster, NO, "Detect Stomata Clustering", "y", "YES- Output an image that contains stomata clustering and the network of stomata. No- No stomata clustering will be displayed.")
+input(Small_Stomata_Cluster, NO, "Detect Small Stomata Clustering (Do NOT Use)", "y", "YES- Output an image that contains small stomata clustering and the network of small stomata. No - No small stomata clustering will be displayed.")
+input(Network_Threshold, 125,"Maximum distance between stomata","i","Enter the maximum distance in pixels between two stomata when establishing the stomata cluster")
+
+//end user input
+
+/// Start to prepare an attribute table for save the distance bettween stomata
+create("objectlist")
+rename(Stomata_Distance_Obj = objectlist) //one way to create an empty objectlist, same can be used for vector
+DefineAttr(Stomata_Distance, 0.0, objects=Stomata_Distance_Obj)
+DefineAttr(Stoma_Connected_ID, 0, objects=objects)
+DefineAttr(Org_Stoma_ID, 0, objects=objects)
+Set(Stomata_Distance_Obj = objects)
+
+//*** HIDDEN PARAMETERS-SCRIPT FINE TUNING AND DEBUG 
+input(IN_Min_StomataArea, 90, "Minimum Stomata Area", "i", "Minimum stomata area theshold value. Value depends on plant species and/or treatment", hidden=yes)
+input(IN_Max_StomataArea, 5250, "Maximum Stomata Area", "i", "Maximum stomata area theshold value. Value depends on plant species and/or treatment", hidden=yes)
+input(IN_MinHalfWidth, 5, "Minimum Half Width", "i", "Minimum half width theshold value to remove string like objects", hidden=yes)
+input(IN_MaxHalfWidth, 35, "Maximum Half Width", "i", "Maximum half width theshold value to remove too large objects", hidden=yes)
+input(IN_MinRatioWL, 0.045, "Minimum Ratio value", "i", "Minimum ratio value for closed stomata", hidden=yes)
+input(IN_MaxRatioWL, 0.75, "Maximum Ratio value", "i", "Maximum ratio value for opened stomata", hidden=yes)
+input(IN_MinRoundness, 0.35, "Minimum Roundness value", "i", "Minimum Roundness value for a stomata filtering", hidden=yes)
+input(IN_MaxRoundness, 1.15, "Maximum Roundness value", "i", "Maximum Roundness value for stomata filtering", hidden=yes)
+input(MinStdDev,3.5,"MinStdDev","i","Minimum standard deviation of pixel intensity in image.", hidden = yes)
+//input(IN_Internediate_Images, NO, "Allows visualisation of intermediate images", "y", "yes: Allows visualization of intermediate images: Projection (P_Wellindex_FieldNumber), Datacube_Projection (DP_Wellindex_FieldNumber) and Mask (M_Wellindex_FieldNumber). Stored as a png file", hidden=no)
+//---------------LOADING IMAGES
+
+//hardcode the number of channels for testing
+set(InvalidStacks = 0)
+set(NumberOfChannels=CameraNo)
+Create("vector") 
+Set(current_Date = __date__)
+
+//use singlewell to turn flex files and turn into internal data objects..
+SingleWell(compact=yes) //only the SourceData, SourceDataProp and WellIndex will be output
+set( imagefilename1 = SourceData.sourcefilename[0])
+RobatzekProcs::ControlImageFieldsStackAC2(sourcedata, NumberOfChannels, ZplanesInStack, StackNo)
+create("objectlist")
+rename(All_Stomata = objectlist) //one way to create an empty objectlist, same can be used for vector
+
+// Ensure variables used in standard Acapella library and Robatzek procedures 
+// can be recongised in the script 
+Alias(_StackCounter, _FieldCounter)
+Alias(StartField, StartStack)
+Alias(EndField, EndStack)
+
+// Prepare output csv file
+set( namelength = length( imagefilename1 ) )
+set( pathname = substr( imagefilename1, 1, namelength - 5))
+printfopen(pathname & "_Results.csv")
+Printf("Well_Location#")
+Printf("Treatment#")
+Printf("Stack_No#")
+Printf("Stomata_Index#")
+Printf("Normal_Stomata#")
+Printf("Small_Stomata#") 
+Printf("Area#") 
+Printf("Roundness#") 
+Printf("Measured_Outer_Width#")
+Printf("Measured_Outer_Length#")
+Printf("Measured_Inner_Width#")
+Printf("Measured_Inner_Length#")
+Printf("Calculated_Inner_Length#")
+If(Output_Stomata_Cluster == 1) 
+	Printf( "Total_Clusters#") // not a number
+	Printf( "AVG_Distance#") // not a number	
+	Printf( "Total_Links#") // not a number
+End()
+Printf("Pixel@um#\n")
+printfopen() 
+// finished with the output file
+
+// Prepare overall output csv file for every flex file
+//set( Overall_pathname = substr( pathname, 1, at("/", pathname, -1)))
+Set(Output_File = "Overall_Results_" & current_Date)
+printfopen(pathname & "_" & Output_File  & ".csv")
+Printf("Well_Location#")
+Printf("Treatment#")
+Printf("Stack_No#")
+Printf("Total_Stomata#")
+Printf("Small_Stomata#") 
+Printf("AVG_Outer_Width#")
+Printf("AVG_Outer_Length#")
+Printf("AVG_Inner_Width#")
+Printf("AVG_Inner_Length#")
+Printf("Pixel@um#\n")
+printfopen() 
+// finished with the output file
+
+// Start to read images from flex files
+Foreach(StartStack .. EndStack, _StackCounter) 
+	
+	Set(BadStacks = false)
+	Printf("Reading Stack %s \n", _StackCounter)	
+	// Assigns image names for the current field, IM_CH1 - first channel image, IM_CH2 - second channel image etc
+	// Changed to read the new Opera flex files 
+	OperaTemplates::AssignStacks(SourceData.Field[0], SourceData=SourceData)
+	
+	//*** Start loading images ***//
+	// Read in 21 planes/slices of images from one channel
+	// change the inputs IN_startPlane and IN_endPlane will modify the number of analysed slices 
+	Foreach(1..NumberOfChannels, channel)
+		Set(table = _["images_CH"&channel]) // _[] find container
+		TableFilter(plane >= IN_startPlane and plane <= IN_endPlane) // the way to filter planes!!!
+		Set(_["images_CH"&channel] = table) //assign back to images channel
+	End()
+	
+////// STEP 1: Pre-process Opera Images 	
+	Foreach(0..(Images_CH1.SourceImage.size-1), counter)
+		//	Delete(slice_IMG)
+			//Bright_Mask(Images_CH2.SourceImage[counter])
+			set(slice_image = Images_CH1.SourceImage[counter]) // clean up every slice of the flex file
+			Median(1, 1, edgemode="mirror", image=slice_image, pedantic=no)
+			//Change the value of a pixel with the median of the pixels in the local neighbourhood in order to smooth the cell wall 
+			Set(Images_CH1.SourceImage[counter] = image)
+	End()
+	// using max projection instead of projection correction
+	OperaTemplates::MaxProjections()	
+	// tried many times with taking some slices away, however either PD or part of the cell wall will be missing 
+	// Finish loading two channels images 
+
+	Resize(2, 2, image=IM_Max_CH1) // resize the max projection image
+	//GaussNoise(image, 1, 1)
+	AntiMedian(image=image, edge= 3)
+	Set(Processed_Stomata_IMG = image)
+
+	//*** Detecting the valid image	area - not precise for the young plant cells	
+	RobatzekProcs::Check_Area(IM_Max_CH1, IM_Plane_CH1)
+	Set(CH1_Area_Mask = Area_Mask)
+	Set(Img_percent = valid_area_percentage)	
+	//*** Finish detecting valid image area ***//
+
+////// STEP One: Pre-process Opera Images 	
+	If(Img_percent < ValidPercent/100 || IM_Max_CH1.max <= 5 || IM_Max_CH1.mean<= 6.25 || IM_Max_CH1.mean>= 215)  
+	// Mean has been changed 52.5 to 215	
+	// discard if the valid image area is below 35%, or the max projection does not contain valid information 
+		set(BadStacks = true)
+		Set(Cell_CH_image_OK = false)
+		If(Img_percent < ValidPercent/100)
+			Warning("Only " & int(Img_percent * 100) & "% of the image can be analysed - stack discarded!")	
+		Else()
+			Warning("The image does not contain valid information - stack discarded!")	
+			Set(Final_Output_Stomata_Obj = All_Stomata) // set Final_Output_Stomata_Obj to an empty objects list
+		End()
+		
+		// Output images
+		set( namelength = length( imagefilename1 ) )
+		set( corename = substr( imagefilename1, 1, namelength - 5) )
+				
+		// Max projection
+		Gamma(1.25, image=Processed_Stomata_IMG)
+		WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-1_Max_Projection.png", image=Image, imageformat="png")
+			
+		// output the results
+		output(NAN, "Total number of stomata in stack " &_StackCounter )
+		output(NAN, "The number of small stomata in stack " &_StackCounter)      
+		// finish outputing resutls   
+		output("**********", "----- Line Break Stack " & _StackCounter&" -----") 
+	
+		// Start to build up the output table
+		printfopen(pathname & "_Results.csv", yes)	
+		Printf("R" & Images_CH1.Row[0] & " C"& Images_CH1.Column[0] & "#")
+		Printf(Images_CH1.AreaName[0] & "#")
+		Printf( _StackCounter & "#")
+		Printf( NAN & "#") // not a number
+		Printf( NAN & "#") // not a number
+		Printf( NAN & "#") // not a number	
+		Printf( NAN & "#") // not a number	
+		Printf( NAN & "#") // not a number	
+		Printf( NAN & "#") // not a number
+		Printf( NAN & "#") // not a number
+		Printf( NAN & "#") // not a number
+		Printf( NAN & "#") // not a number
+		Printf( NAN & "#") // not a number
+		// Output cluster results
+		If(Output_Stomata_Cluster == 1) 
+			Printf( NAN & "#") // not a number
+			Printf( NAN & "#") // not a number	
+			Printf( NAN & "#") // not a number
+		End()
+		Printf(Images_CH1.ImageResolutionX@um[0]/2 & "#\n")
+		printfopen() 
+		// Analysis finishes
+	Else()					
+		Set(Cell_CH_image_OK = true)	
+		
+		If(IM_Max_CH1.mean < 12.5)
+			//*** Brighten images as they are very dark in this experiment ***//	
+			expand(2.5, 0.325, image=Processed_Stomata_IMG) // increase the intensity of stomata borders
+			// Remove 2.5% of the dark pixels and increase the bright pixels with 1%		
+			set(Expanded_Stomata_IMG = image)		
+		Else()
+			//*** Brighten images as they are very dark in this experiment ***//	
+			expand(2.5, 0.225, image=Processed_Stomata_IMG) // increase the intensity of stomata borders
+			// Remove 2.5% of the dark pixels and increase the bright pixels with 0.125%		
+			set(Expanded_Stomata_IMG = image)		
+		End()
+		Gamma(1.25, image=Processed_Stomata_IMG)	////// Finish pre-processing images
+		Set(Processed_Stomata_IMG = image)
+////// Finish pre-processing images 	
+
+////// STEP 2: Start to detect Stomata
+	// Counting of invalid (black=unfocussed) fields and termination of evaluation for these
+		Cut(Expanded_Stomata_IMG.mean * 0.125, image=Expanded_Stomata_IMG, keep_bottom=no) 
+		// cut around 15% of the darkest pixels 
+		Set(IM_CH1_Bg_Cut = image)
+
+		//*** Pre-process the image
+		Bright_Mask(Expanded_Stomata_IMG)
+		Set(mask_bright = M_bright)
+		Set(mask_dark = result)
+		Set(mask_middle = IM_CH1_Bg_Cut)
+
+	//*** STEP 2.0: detection with bright mask - use this procedure when upgrading to 2.6***//
+		//Mask(1, image = M_bright)
+		//Mask2Stencil(mask, Neighbourhood=4) // using Neighbourhood equals to 4 pixels
+		//Stencil2Objects()
+		//RemoveSmallObjects(250)
+	//*** End of STEP 2.0 ***// 
+
+	//*** STEP 2.1: initial detection using zone ***//
+		ThresholdXX(0.75, Image = Processed_Stomata_IMG)
+		If(Processed_Stomata_IMG.mean > 27.5) // use different threshold for detecting outer layers
+			If(Processed_Stomata_IMG.mean > 42.5)
+				Mask(threshold = threshold * 0.55, image = mask_dark)
+			Else()
+				Mask(threshold = threshold * 0.5, image = mask_dark)
+			End()
+		Else()
+			Mask(threshold = threshold * 0.4, image = mask_dark)
+		End()
+		Mask2Stencil() // using Neighbourhood equals to 4 pixels
+		// Creates from the stencil an object list. 
+		// The clump/stuck objects are not separated and small artifacts are erroneously counted as objects.
+		Stencil2Objects()
+
+		// Adds to the list Zone and OuterZone structures.
+		RemoveBorderObjects(5, objects=objects, stencil=body)	
+		CalcArea()
+		ObjectFilter(area > 2.5)
+		CalcIntensity(Image=Processed_Stomata_IMG, CalcStdDev=yes, Total= no)		
+		ObjectFilter(intensity > Processed_Stomata_IMG.mean * 1.25 || intensity_stddev > 5) 
+		object_contrast_general(reference = Processed_Stomata_IMG, ContrastDef = "WithoutCyto") 
+		ObjectFilter(contrast > 0.125 && contrast < 0.65)
+		FillObjects()
+		Set(ROI_INI = objects)
+
+		// Re-assemble the mask, small pixels between gaps of outer layers should be filled
+		Mask(1, image=ROI_INI.body.mask.image)
+		Mask2Stencil()
+		Stencil2Objects()	
+		CalcErosion(-1, objects = objects, Stencil = stencil) // increasing 1 pixel to connect the gap of stomata border 
+		RenameAttr(body = stencil_eroded)
+		Mask2Stencil(objects.body.mask.image)			
+		Stencil2Objects()
+		FillObjects()
+		CalcArea(AutoRecalc=yes)	
+		ObjectFilter(area > 10)	
+		CalcWidthLength(Upto100=yes)
+		CalcAttr(WidthLengthRatio, (2*half_width)/full_length)
+		ObjectFilter(WidthLengthRatio > 0.15 || full_length > 27.5)
+		object_contrast_general(reference = Processed_Stomata_IMG, ContrastDef = "WithoutCyto") 
+		ObjectFilter(area > 215 || contrast > 0.325) 
+		ObjectFilter((area > 215 && WidthLengthRatio > 0.275 && contrast > 0.15) || contrast > 0.275 || area > 500)	
+
+		// not using IN_Min_StomataArea, as 1 extra pixel has been eroded from the image
+		set(stencil = objects.body)		
+		CalcErosion(-3, objects = objects, Stencil = stencil) // increasing 3 pixels to connect the gap of stomata border 
+		RenameAttr(body = stencil_eroded)
+		Mask2Stencil(objects.body.mask.image)			
+		Stencil2Objects()
+		FillObjects()
+		CalcArea(AutoRecalc=yes)
+		ObjectFilter( area > 250) // This is due to the image has been resized!!!
+		RemoveBorderObjects(3)
+		// Start to perform the final filter
+
+		set(stencil = objects.body)	
+		CalcErosion(3, objects = objects, Stencil = stencil) 
+		// decreasing 3 pixels to make sure that border of the zone mask will touch the border of the stomata
+		RenameAttr(body = stencil_eroded)	
+		Mask2Stencil(objects.body.mask.image)
+		Stencil2Objects()	
+		FillObjects()
+
+		// Recalculate border
+		CalcBorder(body, AutoRecalc=yes)
+		// Start to filter the recognised stomata		
+		CalcArea(AutoRecalc=yes)
+		CalcArea(border, AutoRecalc=yes)
+		ObjectFilter(area > IN_Min_StomataArea * 0.75 && area < IN_Max_StomataArea * 1.5) 
+		// not using the IN_MIN_Area for now
+		RobatzekProcs::CalcRoundnessCorrected(objects=objects)			
+		CalcWidthLength(Upto100=no)
+		CalcAttr(WidthLengthRatio, (Area/(full_length/2)/full_length))
+		ObjectFilter(roundnesscorrected > 0.425 || WidthLengthRatio > 0.35) //Filtering very flat-shape objects
+		ObjectFilter(half_width <= IN_MaxHalfWidth * 1.25 && half_width >= IN_MinHalfWidth * 0.75)
+		object_contrast_general(reference = Processed_Stomata_IMG, ContrastDef = "WithoutCyto") 
+		ObjectFilter(contrast < 0.6)
+		CalcIntensity(Image=Processed_Stomata_IMG, CalcStdDev=yes, Total= no)		
+		ObjectFilter(intensity_stddev > 5.25) 
+		CalcAttr(Shape_Metric, 4*pi*area/(border_area^2))
+		CalcIntensity(border, Processed_Stomata_IMG, CalcStdDev=no, Total=no)
+		CalcAttr(Intensity_Diff, Intensity/border_Intensity) 
+		Set(Cell_stomata_zone_Obj = objects)
+		// Categorise objects list to flat and normal groups
+		ObjectFilter(Shape_Metric <= 0.65 || roundnesscorrected <= 0.925, objects = Cell_stomata_zone_Obj)
+		Set(Cell_stomata_zone_Flat = objects)
+		ObjectFilter(Shape_Metric > 0.65 && roundnesscorrected > 0.925, objects = Cell_stomata_zone_Obj)
+		Set(Cell_stomata_zone_Normal = objects)
+
+		// Filter normal objects
+		ObjectFilter(Intensity_Diff < 1.05 && half_width > 3.75 && WidthLengthRatio > 0.325 && Shape_Metric > 0.5, objects = Cell_stomata_zone_Normal)
+		ObjectFilter( !(Intensity_Diff > 1 && Shape_Metric < 0.6 && WidthLengthRatio > 0.5)) 
+		// get rid of square shape miss detected objects
+		Set(Cell_stomata_zone_Normal = objects)
+
+		// Filter flat objects
+		ObjectFilter(Intensity_Diff < 1.75 && WidthLengthRatio > 0.25 && half_width > 3.75 && (Shape_Metric > 0.35 || area > 2150), objects = Cell_stomata_zone_Flat)
+		Set(Cell_stomata_zone_Flat = objects)
+		// Finish initially detect zone objects
+
+		// Start to refine the Zone objects
+		Or(Cell_stomata_zone_Flat.body.mask.image, image = Cell_stomata_zone_Normal.body.mask.image)
+		Mask2Stencil(image)
+		Stencil2Objects()
+		CalcErosion(1, objects = objects, Stencil = stencil) // decreasing 1 pixel
+		RenameAttr(body = stencil_eroded)	
+		Mask2Stencil(objects.body.mask.image)
+		Stencil2Objects()		
+		CalcArea(AutoRecalc=yes)
+		ObjectFilter(area > IN_Min_StomataArea * 0.75 && area < IN_Max_StomataArea * 1.5) 
+		object_contrast_general(reference = Processed_Stomata_IMG, ContrastDef = "WithoutCyto") 
+		ObjectFilter(contrast < 0.575)
+		CalcIntensity(Image=Processed_Stomata_IMG, CalcStdDev=yes, Total= yes)		
+		CalcIntensity(border, Processed_Stomata_IMG, CalcStdDev=yes, Total=yes)
+		CalcAttr(AVG_Body_Intensity, (intensity/area))
+		Delete(Intensity_Body_Threshold)
+		Set(Intensity_Body_Threshold = objects.AVG_Body_Intensity.mean) // get rid of bright image objects
+		ObjectFilter(AVG_Body_Intensity <= Intensity_Body_Threshold * 2.75 && AVG_Body_Intensity >= Intensity_Body_Threshold * 0.25) 
+		// To accept very bright stomata
+		CalcArea(border, AutoRecalc=yes)
+		CalcAttr(AVG_Border_Intensity, (border_intensity/border_area))
+		Delete(Intensity_Border_Threshold)
+		Set(Intensity_Border_Threshold = objects.AVG_Border_Intensity.mean) // get rid of bright image objects
+		ObjectFilter(AVG_Border_Intensity <= Intensity_Border_Threshold * 2.75 && AVG_Border_Intensity >= Intensity_Border_Threshold * 0.525) 
+		// Make sure outer layers are existing
+		CalcAttr(Intensity_Diff, AVG_Body_Intensity / AVG_Border_Intensity)
+		ObjectFilter(Intensity_Diff < 1.215)
+		Set(Cell_stomata_zone_Obj_refined = objects)
+		set(Mask_From_Zone = Cell_stomata_zone_Obj_refined.body.mask.image)		
+
+
+	//*** STEP 2.2: Detect using nuclei detection as the shape of stomota is similar to nuclei ***//
+		// Set up nuclei shape detection input parameters	
+		set(ThresholdAdjustment = 1.25)
+		set(MinimumNuclearArea = IN_Min_StomataArea * 0.75)
+		Set(MinimumNuclearContrast = 0.25)
+		// Start to detecting
+		nuclei_detection_G(Processed_Stomata_IMG, no)
+		set(stencil = Nuclei.body)		
+		CalcErosion(2, objects = Nuclei, Stencil = stencil) // decreasing 2 pixels
+		RenameAttr(body = stencil_eroded)
+
+		Mask2Stencil(objects.body.mask.image)
+		Stencil2Objects()
+		// Start to filter the recognised stomata
+		RemoveBorderObjects(1)
+		CalcArea(AutoRecalc=yes)
+		CalcArea(border, AutoRecalc=yes)
+		ObjectFilter(area > IN_Min_StomataArea * 0.75 && area < IN_Max_StomataArea * 1.25) 
+		// not using the IN_MIN_Area for now
+		RobatzekProcs::CalcRoundnessCorrected(objects=objects)	
+		CalcWidthLength(Upto100=no)
+		CalcAttr(WidthLengthRatio, (Area/(full_length/2)/full_length))
+		ObjectFilter(roundnesscorrected > 0.425 || WidthLengthRatio > 0.35) //Filtering very flat-shape objects
+		ObjectFilter(half_width <= IN_MaxHalfWidth * 1.25 && half_width >= IN_MinHalfWidth * 0.75)
+		object_contrast_general(reference = Processed_Stomata_IMG, ContrastDef = "WithoutCyto") 
+		ObjectFilter(contrast < 0.6)
+		CalcIntensity(Image=Processed_Stomata_IMG, CalcStdDev=yes)
+		ObjectFilter(intensity_stddev > 5.25)
+
+		// get rid of very bright image objects
+		Delete(Intensity_Body_Threshold)
+		Set(Intensity_Body_Threshold = objects.Intensity.mean) // in the future, use the processed image to filter objects
+		ObjectFilter(Intensity <= Intensity_Body_Threshold * 2.75 && Intensity >= Intensity_Body_Threshold * 0.275)
+		CalcAttr(Shape_Metric, 4*pi*area/(border_area^2))
+		CalcIntensity(border, Processed_Stomata_IMG, CalcStdDev=no, Total=no)
+		CalcAttr(Intensity_Diff, Intensity/border_Intensity)
+		ObjectFilter(Intensity_Diff < 1.1 && Shape_Metric > 0.425)
+		// Output objects list
+		Set(Cell_stomata_nuclei_Obj = objects)
+
+		set(stencil = Cell_stomata_nuclei_Obj.body)		
+		CalcErosion(-1, objects = Cell_stomata_nuclei_Obj, Stencil = stencil) // increasing 1 pixel
+		RenameAttr(body = stencil_eroded)	
+		Set(stencil = objects.body)
+		CalcErosion(1, objects = objects, Stencil = stencil) // decreasing 1 pixel 
+		RenameAttr(body = stencil_eroded)	
+		Mask2Stencil(objects.body.mask.image)
+		Stencil2Objects()		
+		CalcArea(AutoRecalc=yes)
+		ObjectFilter(area > IN_Min_StomataArea * 0.75 && area < IN_Max_StomataArea * 1.25) 
+		object_contrast_general(reference = Processed_Stomata_IMG, ContrastDef = "WithoutCyto") 
+		ObjectFilter(contrast < 0.6)
+		CalcIntensity(Image=Processed_Stomata_IMG, CalcStdDev=yes, Total= yes)		
+		CalcIntensity(border, Processed_Stomata_IMG, CalcStdDev=yes, Total=yes)
+		CalcAttr(AVG_Body_Intensity, (intensity/area))
+		Delete(Intensity_Body_Threshold)
+		Set(Intensity_Body_Threshold = objects.AVG_Body_Intensity.mean) // get rid of bright image objects
+		ObjectFilter(AVG_Body_Intensity <= Intensity_Body_Threshold * 2.75 && AVG_Body_Intensity >= Intensity_Body_Threshold * 0.275)
+		CalcArea(border, AutoRecalc=yes)
+		CalcAttr(AVG_Border_Intensity, (border_intensity/border_area))
+		Delete(Intensity_Border_Threshold)
+		Set(Intensity_Border_Threshold = objects.AVG_Border_Intensity.mean) // get rid of bright image objects
+		ObjectFilter(AVG_Border_Intensity <= Intensity_Border_Threshold * 2.5 && AVG_Border_Intensity >= Intensity_Border_Threshold * 0.5)
+		CalcAttr(Intensity_Diff, AVG_Body_Intensity / AVG_Border_Intensity)
+		ObjectFilter(Intensity_Diff < 1.05)
+		Set(Cell_stomata_nuclei_Obj_refined = objects)
+		set(Mask_From_Nuclei = Cell_stomata_nuclei_Obj_refined.body.mask.image)		
+
+	//*** STEP 2.3: Start to detect genuine Stomata ***//
+		XOR(Mask_From_Zone, image=Mask_From_Nuclei)  
+		Set(mask_Stomata_XOR = image)
+		Mask2Stencil(mask_Stomata_XOR, "Joint clusters", Neighbourhood = 4)
+		Stencil2Objects(Neighbourhood = 4)
+		CalcErosion(1, objects = objects, Stencil = stencil) // decreasing 1 pixel to get rid of overlapped outlines
+		RenameAttr(body = stencil_eroded)	
+		Mask2Stencil(objects.body.mask.image)
+		Stencil2Objects(Neighbourhood = 4)
+		CalcArea(AutoRecalc=yes)
+		ObjectFilter(area > 2.5)
+		CalcIntensity(Image=Expanded_Stomata_IMG, CalcStdDev=no, Total=yes)
+		CalcAttr(AVG_Body_Intensity, (intensity/area))
+		Delete(Intensity_Body_Threshold)
+		Set(Intensity_Body_Threshold = objects.AVG_Body_Intensity.mean) // get rid of bright image objects
+		ObjectFilter(AVG_Body_Intensity <= Intensity_Body_Threshold * 3.25 && AVG_Body_Intensity >= Intensity_Body_Threshold * 0.125)
+		CalcIntensity(border, Expanded_Stomata_IMG, CalcStdDev=no, Total=yes)
+		CalcArea(border, AutoRecalc=yes)
+		CalcAttr(AVG_Border_Intensity, (border_intensity/border_area))
+		Delete(Intensity_Border_Threshold)
+		Set(Intensity_Border_Threshold = objects.AVG_Border_Intensity.mean) // get rid of bright image objects
+		ObjectFilter(AVG_Border_Intensity <= Intensity_Border_Threshold * 3.25 && AVG_Border_Intensity >= Intensity_Border_Threshold * 0.475)
+		Delete(Border_Area_Threshold)
+		Set(Border_Area_Threshold = objects.border_area.median) // get rid of bright image objects
+		ObjectFilter(border_area > Border_Area_Threshold * 0.25 && border_area < 350) // get rid of small image objects
+		CalcAttr(Intensity_Diff, (AVG_Body_Intensity/AVG_Border_Intensity))
+		CalcAttr(Shape_Metric, 4*pi*area/(border_area^2))
+		ObjectFilter(Shape_Metric > 0.275 && Shape_Metric < 1.75) // to take the closed stomata
+		ObjectFilter(!((Shape_Metric < 0.375 && area > 1250) || (Shape_Metric < 0.375 && area <= 1250 && area > 625 && AVG_Border_Intensity < Intensity_Border_Threshold * 0.85) || (Shape_Metric < 0.325 && area <= 625 && AVG_Border_Intensity < Intensity_Border_Threshold))) // to get rid of flat line style shapes
+		ObjectFilter((Intensity_Diff < 0.85 && area < 925 && area > 375) || (Intensity_Diff < 0.925 && area >= 925) || (Intensity_Diff < 0.85 && area <= 425) || (Intensity_Diff < 1.1 && area >= 425 && area <= 625 && Shape_Metric < 0.475) || (Intensity_Diff < 0.95 && area> 625 && Shape_Metric < 0.475)) 
+		// big ones should have lower Intensity_Diff
+		// Exceptional case
+		ObjectFilter(!(Intensity_Diff < 0.575 && Shape_Metric < 0.45 && area > 1250 && AVG_Border_Intensity < Intensity_Border_Threshold * 0.85))
+		ObjectFilter(!(Intensity_Diff >1.025 && Shape_Metric < 0.35 && area > 425 && area < 925 && AVG_Body_Intensity > Intensity_Body_Threshold * 1.25))
+		Set(Cell_stomata_Outline_XOR = objects) // Objects to keep
+		XOR(mask_Stomata_XOR, image=Cell_stomata_Outline_XOR.body.mask.image)    
+		Set(mask_Stomata_XOR_Refined = image)
+
+
+		// Begin to apply retained stomata objects
+		OR(Mask_From_Zone, image=Mask_From_Nuclei)    
+		Set(mask_Stomata_Final = image)
+		XOR(mask_Stomata_Final, image=mask_Stomata_XOR_Refined)    
+		// To provide better results for closed stomata - get rid of cell walls
+		Set(mask_Stomata_Final_refined = image)
+		Mask2Stencil(mask_Stomata_Final_refined, "Joint clusters", Neighbourhood = 4)
+
+		Stencil2Objects(Neighbourhood = 4)
+		CalcErosion(-1, objects = objects, Stencil = stencil) // increasing 1 pixel
+		RenameAttr(body = stencil_eroded)
+		RemoveBorderObjects(3)
+		
+		Mask2Stencil(objects.body.mask.image, "Joint clusters", Neighbourhood = 4)
+		Stencil2Objects(Neighbourhood = 4)
+		CalcErosion(1, objects = objects, Stencil = stencil) // decreasing 1 pixel
+		RenameAttr(body = stencil_eroded)
+
+		Mask2Stencil(objects.body.mask.image, "Joint clusters", Neighbourhood = 4)
+		Stencil2Objects(Neighbourhood = 4)
+		// Start to filter the recognised stomata		
+		CalcArea(AutoRecalc=yes)
+		ObjectFilter(area > IN_Min_StomataArea * 0.5 && area < IN_Max_StomataArea * 1.5) 
+		// not using the IN_MIN_Area to keep very small stomata 
+		RobatzekProcs::CalcRoundnessCorrected(objects=objects)	
+		CalcWidthLength(Upto100=no)
+		CalcAttr(Real_WLRatio, (Area/(pi * full_length/2)/full_length))
+		ObjectFilter(Real_WLRatio > 0.05 && roundnesscorrected > 0.375) // Filter strange shapes
+		ObjectFilter(half_width <= IN_MaxHalfWidth * 1.25 && half_width >= IN_MinHalfWidth * 0.5)
+		object_contrast_general(reference = Expanded_Stomata_IMG, ContrastDef = "WithoutCyto") 
+		ObjectFilter(contrast < 0.725) // used different expanded reference image 
+
+		CalcIntensity(Image=Expanded_Stomata_IMG, CalcStdDev=yes, Total=yes)
+		Delete(intensity_Stddev_Median)
+		Set(intensity_Stddev_Median = objects.intensity_stddev.median) // using real value from the array
+		ObjectFilter(intensity_stddev > intensity_Stddev_Median * 0.25 || intensity_stddev == 0) 
+		// in case the flat stomata is very birght which will not produce any intensity difference
+		CalcAttr(AVG_Body_Intensity, (intensity/area))
+		Delete(Intensity_Body_Threshold)
+		Set(Intensity_Body_Threshold = objects.AVG_Body_Intensity.mean) // get rid of bright image objects
+		ObjectFilter(AVG_Body_Intensity <= Intensity_Body_Threshold * 3.75 && AVG_Body_Intensity >= Intensity_Body_Threshold * 0.125)
+		CalcIntensity(border, Expanded_Stomata_IMG, CalcStdDev=yes, Total=yes)
+		CalcArea(border, AutoRecalc=yes)
+		CalcAttr(AVG_Border_Intensity, (border_intensity/border_area))
+		Delete(Intensity_Border_Threshold)
+		Set(Intensity_Border_Threshold = objects.AVG_Border_Intensity.mean) // get rid of bright image objects
+		ObjectFilter((AVG_Border_Intensity <= Intensity_Border_Threshold * 2.75 && AVG_Border_Intensity >= Intensity_Border_Threshold * 0.475) || (AVG_Border_Intensity <= Intensity_Border_Threshold * 2.75 && AVG_Border_Intensity >= Intensity_Border_Threshold * 0.35 && area < 850)) // to accept small objects
+		Delete(Border_Area_Threshold)
+		Set(Border_Area_Threshold =  objects.border_area.median) // get rid of bright image objects
+		ObjectFilter(border_area > Border_Area_Threshold * 0.25 && border_area < 350) // get rid of small image objects
+
+		CalcAttr(Intensity_Diff, AVG_Body_Intensity / AVG_Border_Intensity)
+		CalcAttr(Shape_Metric, 4*pi*area/(border_area^2))
+		// CalcAttr(Roundness, 4*area/(pi * (full_length ^ 2)))
+		ObjectFilter((Intensity_Diff < 0.975 && area >= 325) || (Intensity_Diff < 0.905 && area < 325) || (Real_WLRatio < 0.2 && Intensity_Diff < 1.0125 && (area < 925 && area > 325) && Shape_Metric< 0.825) || (Real_WLRatio < 0.2 && Intensity_Diff < 0.95 && area <= 325 && Shape_Metric< 0.825) || (Intensity_Diff < 1.1 && (area < 1250 && area > 325) && Shape_Metric< 0.5 && Real_WLRatio < 0.2)) 
+		// This will find out the intensity difference between border and inside of stomata area		
+		ObjectFilter(Shape_Metric >= 0.25 && Shape_Metric <= 1.75)
+		// Exceptional cases
+		ObjectFilter(!(Real_WLRatio < 0.125 && AVG_Border_Intensity <= Intensity_Border_Threshold * 0.85 && intensity_Diff > 0.7))
+		// Filter strange flat shapes
+		ObjectFilter(!(area < 350 && roundnesscorrected < 0.75 && (Real_WLRatio > 0.15 && Real_WLRatio < 0.35) && intensity_Diff > 0.9))
+		// Filter strange flat shapes
+		
+		// Start to remove paried attached objets
+		CalcAttr(True_Stomata, 1)
+		// Produce the objects list
+		Set(Cell_stomata_Outline_Obj = objects)
+		Set(Cell_Stomata_Final_Mask = Cell_stomata_Outline_Obj.body.mask.image)
+
+		// Stop the detection if not enough stomata have been found
+		If(Cell_stomata_Outline_Obj.@count < 3)
+			Set(BadStacks = 1)
+			Set(Final_Output_Stomata_Obj = Cell_stomata_Outline_Obj)
+		End()
+
+		Set(stencil = Cell_stomata_Outline_Obj.body)
+		CalcErosion(1, objects = Cell_stomata_Outline_Obj, Stencil = stencil) // decreasing 1 pixel
+		RenameAttr(body = stencil_eroded)
+		Set(Cell_Stomata_Final_Mask_eroded = objects.body.mask.image)
+		// Finish building up the stomata ROI
+
+
+
+		If(!BadStacks)	
+	////// STEP 3: Start to detect inner layers of Stomata	
+		//*** STEP 3.1: Produce a background mask based on Intensity difference ***//		
+			expand(25, 2.15, image = Processed_Stomata_IMG)	
+			Gamma(0.85, image = image)
+			set(Expanded_Stomata_IMG_2 = image) // increase the contrast for inner layer detection
+			Set(Total_Close_Stomata_Trigger = 0)
+	
+			// use expanded image to increase the difference between inner pore and its surrounding layers
+			Inverse(dynamic=yes, image=Expanded_Stomata_IMG_2)
+			set(Expanded_Stomata_IMG_inversed = image)
+			// Invert the image for detecting inner layers 
+	
+			CalcIntensity(objects=Cell_stomata_Outline_Obj, Image=Expanded_Stomata_IMG_inversed)
+			Set(Refined_Stomata_Intensity_Obj = objects)
+			// Recalculate the expanded intensity 
+	
+			Set(Obj_Counter = 0)
+			set(IM_Height_Expanded = Expanded_Stomata_IMG_2.height)
+			set(IM_Width_Expanded = Expanded_Stomata_IMG_2.width)
+			Blank(IM_Width_Expanded, IM_Height_Expanded)
+			set(Inner_Aperture_IMG = image) // Create a blank image
+	
+			Foreach(0..(Cell_stomata_Outline_Obj.@count - 1), Obj_Counter)
+				Mask2Stencil(Cell_stomata_Outline_Obj[Obj_Counter].body.image)
+				Stencil2Objects()
+				CalcErosion(Cell_stomata_Outline_Obj.half_width[Obj_Counter] * 0.75, objects = objects, Stencil = stencil) 
+				// decreasing around 14 pixels in total
+				// Take the inside area of the stoma object
+				RenameAttr(body = stencil_eroded)
+				Mask2Stencil(objects.body.mask.image)
+				Stencil2Objects()
+				CalcIntensity(body, Expanded_Stomata_IMG, CalcStdDev= no, Total = yes) 
+				CalcArea()
+				ObjectFilter(area > 5)
+				Set(TEMP_Stomata_Area_Obj = objects)
+				Set(AVG_INNER_Area_Intensity = (TEMP_Stomata_Area_Obj.intensity.sum/TEMP_Stomata_Area_Obj.area.sum))
+
+				And(Cell_stomata_Outline_Obj[Obj_Counter].body.image, image = Expanded_Stomata_IMG_inversed)
+				// Find the region for detecting inner aperture
+				Set(TEMP_IMG_Nagetive = image)
+				Mask(threshold = Refined_Stomata_Intensity_Obj.Intensity[Obj_Counter] * 1.25, image = TEMP_IMG_Nagetive)
+				// Set the adaptive thresholding
+				Mask2Stencil() 
+				Stencil2Objects()	
+				FillObjects()
+				CalcIntensity(body, Expanded_Stomata_IMG, CalcStdDev= no, Total = yes) 
+				CalcArea()
+				Set(TEMP_Stomata_INNER_Obj = objects)
+				Set(AVG_INNER_Area_Refined_Intensity = (TEMP_Stomata_INNER_Obj.intensity.sum/TEMP_Stomata_INNER_Obj.area.sum))
+
+				// Find the middle line of the stomata 
+				CalcSkeletonByIntensity(SkeletonType="nodeavoiding", Image=Expanded_Stomata_IMG, IntensityEvalParam=-oo, Objects=TEMP_Stomata_Area_Obj)
+				set(stencil = objects.skeleton)
+				Stencil2Objects()
+				CalcErosion(-1, objects = objects, Stencil = stencil) // increasing 1 pixels
+				RenameAttr(body = stencil_eroded)
+				Mask2Stencil(objects.body.mask.image, "One large object")
+				CalcIntensity(Image=Expanded_Stomata_IMG, CalcStdDev=yes, Total=yes) 
+				CalcArea()				
+				Set(AVG_Middle_Line_Intensity = objects.intensity.sum / Objects.area.sum) 
+				Set(TEMP_Stomata_Middle_Obj = objects)
+				// the top and bottom pixels are touching the stomata border 
+				// Find the middle line of the stomata 
+
+				If(TEMP_Stomata_Area_Obj.area.sum > IN_Min_StomataArea * 0.5 && ((AVG_Middle_Line_Intensity * 0.875 > AVG_INNER_Area_Refined_Intensity && AVG_Middle_Line_Intensity * 1.025 > AVG_INNER_Area_Intensity) || (AVG_Middle_Line_Intensity * 0.925 > AVG_INNER_Area_Intensity && AVG_Middle_Line_Intensity > AVG_INNER_Area_Refined_Intensity) || (AVG_Middle_Line_Intensity * 0.925 > AVG_INNER_Area_Refined_Intensity && AVG_Middle_Line_Intensity * 0.975 > AVG_INNER_Area_Intensity) || (AVG_Middle_Line_Intensity * 0.95 > AVG_INNER_Area_Refined_Intensity && AVG_Middle_Line_Intensity > AVG_INNER_Area_Intensity && TEMP_Stomata_Area_Obj.area.sum > IN_Min_StomataArea * 0.75)))
+				// the middle line touches the border which will increase the intensity value for around 10%
+				// Area setting depends on big stomata will have bright inner layers
+					Set(Total_Close_Stomata_Trigger = 1)
+				End()
+
+				If(TEMP_Stomata_INNER_Obj.@count > 0 && TEMP_Stomata_INNER_Obj.area.sum < Cell_stomata_Outline_Obj.area[Obj_Counter] && Total_Close_Stomata_Trigger != 1)
+					// Only process the inner aperture detection when valid pixels can be found
+					Maximums(1, Image=Expanded_Stomata_IMG, Mask=TEMP_Stomata_INNER_Obj.body.mask)
+					ObjectsFromCenters(maximums, TEMP_Stomata_INNER_Obj.body, Image=Expanded_Stomata_IMG_inversed, MinimumArea= 0.75)
+					// Break the detected inner layers objects				
+					CalcIntensity(body, Expanded_Stomata_IMG, CalcStdDev=yes, Total=yes) 
+					// use inversed image to calculate intensity
+					CalcArea()
+					CalcAttr(AVG_Body_Intensity, (intensity/area))
+					Delete(Intensity_Body_Threshold)
+					Set(Intensity_Body_Threshold = objects.AVG_Body_Intensity.mean) 
+					// get rid of darkest objects on the inversed image as they are the brightest
+					// Filtering based on the intenstiy difference			
+					ObjectFilter(AVG_Body_Intensity < Intensity_Body_Threshold * 1.025 && ((intensity_stddev > 5 && area >= 7.5) || (area < 7.5 && intensity_stddev >= 0)) || AVG_Body_Intensity < Intensity_Body_Threshold * 0.75)
+					OR(objects.body.mask.image, image = Inner_Aperture_IMG)
+					Set(Inner_Aperture_IMG = image)
+
+				Else()
+					Delete(objects) // no inner layers can be found
+					Set(Total_Close_Stomata_Trigger = 0)
+				end()
+			End()
+
+			Mask2Stencil(Inner_Aperture_IMG)
+			Stencil2Objects()	
+			FillObjects()
+			// keep the pixels which are below the average intensity		
+			Set(Cell_Inner_Layer_Initial = objects)
+
+			Set(stencil = Cell_Inner_Layer_Initial.body)
+			CalcErosion(-1, objects = objects, Stencil = stencil) // increasing 2 pixels
+			RenameAttr(body = stencil_eroded)
+			Mask2Stencil(objects.body.mask.image)
+			Stencil2Objects()
+
+			CalcErosion(1, objects = objects, Stencil = stencil) // decreasing 1 pixel
+			RenameAttr(body = stencil_eroded)
+			Mask2Stencil(objects.body.mask.image)
+			Stencil2Objects()
+			FillObjects()
+			Set(Cell_Inner_Layer_TEMP = objects)
+
+			And(Cell_Inner_Layer_TEMP.body.mask.image, image = Expanded_Stomata_IMG) 
+			// find the bright areas within detected initial inner apterture			
+			Mask(threshold = image.max * 0.325, image = image) 
+			// Calculate dthreshold could be ZERO
+			Mask2Stencil()
+			// Building bright pixel objects based on the inner apterure image 
+			Stencil2Objects()
+			Set(Cell_Inner_Layer_TEMP_Remove = objects)
+
+			Xor(Cell_Inner_Layer_TEMP.body.mask.image, image = Cell_Inner_Layer_TEMP_Remove.body.mask.image)
+			Set(Cell_Inner_Layer_Refined_IMG = image)
+
+			Mask2Stencil(Cell_Inner_Layer_Refined_IMG)	
+			Stencil2Objects()
+			CalcArea()
+			ObjectFilter(area > 5)
+			FillObjects() // fill holes within detected inner apterture
+			Set(Cell_Inner_Layer_refined = objects)
+			// Finish getting rid of small pixels and low contrast objects
+
+			//*** STEP 3.2: Start to refine inner layers ***//			
+			Mask2Stencil(Cell_Inner_Layer_refined.body.mask.image)
+			Stencil2Objects(Neighbourhood = 4)
+			CalcArea(AutoRecalc=yes)
+			CalcErosion(-1, objects = objects, Stencil = stencil) // increasing 1 pixel
+			RenameAttr(body = stencil_eroded)
+			Mask2Stencil(objects.body.mask.image)
+			Stencil2Objects(Neighbourhood = 4)
+			CalcErosion(1, objects = objects, Stencil = stencil) // decreasing 1 pixel
+			RenameAttr(body = stencil_eroded)
+	
+			Mask2Stencil(objects.body.mask.image)
+			Stencil2Objects()
+			FillObjects()
+			// Start to calculate real width of every inner layer objects
+			CalcArea(AutoRecalc=yes)
+			CalcArea(border, AutoRecalc=yes)
+			ObjectFilter(area > 7.5) // remove very small objects 
+			CalcIntensity(Image=Processed_Stomata_IMG, CalcStdDev=yes, Total=no)
+			CalcWidthLength()		
+			CalcAttr(WL_Ratio, half_width/full_length)
+			// calculate width, assume the inner area is an ellipse 
+			CalcAttr(Measure_Width, (2* (area/(pi*full_length/2) + half_width)/2)) 
+			CalcAttr(Measure_Length, ((2* area/(pi*half_width) + full_length)/2)) 
+			// Measured Width based on possible minor axis, mask width, and square width
+			CalcAttr(Measured_WL_Ratio, full_length/Measure_Width)		
+			Set(Cell_Inner_Layer_Final = objects)		
+			//*** Finish detecting inner aperture
+
+
+
+		//*** STEP 3.3: Start to finalise detected stomata  ***//		
+			Mask2Stencil(Cell_Stomata_Final_Mask_eroded)
+			Stencil2Objects()		
+			CalcArea(AutoRecalc=yes)
+			Set(Final_Output_Stomata_Obj_initial = objects)
+			ObjectFilter(area <= IN_Min_StomataArea * 5 && area > 21.5, objects=Final_Output_Stomata_Obj_initial)
+			Set(stencil = objects.body)
+			CalcErosion(-1, objects = objects, Stencil = stencil) // increasing 1 pixel
+			RenameAttr(body = stencil_eroded)
+			Set(stencil = objects.body)
+			CalcErosion(1, objects = objects, Stencil = stencil) // decreasing 1 pixel
+			RenameAttr(body = stencil_eroded)
+			Set(Cell_Stomata_Final_small = objects.body.mask.image)		
+	
+			ObjectFilter(area > IN_Min_StomataArea * 5, objects=Final_Output_Stomata_Obj_initial)
+			Set(stencil = objects.body)
+			CalcErosion(1, objects = objects, Stencil = stencil) // decreasing 1 pixel
+			RenameAttr(body = stencil_eroded)
+			Mask2Stencil(objects.body.mask.image)
+			Stencil2Objects()		
+			CalcArea(AutoRecalc=yes)
+			ObjectFilter( area > IN_Min_StomataArea * 0.125) // remove small pixels 
+			Set(stencil = objects.body)
+			CalcErosion(-1, objects = objects, Stencil = stencil) // increasing 1 pixel
+			RenameAttr(body = stencil_eroded)
+			Set(Cell_Stomata_Final_Big = objects.body.mask.image)		
+	
+			Or(Cell_Stomata_Final_Big, image = Cell_Stomata_Final_small)
+			Mask2Stencil(image)
+			Stencil2Objects(Neighbourhood = 3)
+			RemoveBorderObjects(5) // remove stomata attached to the border
+			CalcArea(AutoRecalc=yes)
+			// ObjectFilter( area >= IN_Min_StomataArea && area <= IN_Max_StomataArea) 
+			CalcIntensity(Image=Processed_Stomata_IMG, Total=yes)
+			CalcAttr(AVG_Body_Intensity, (intensity/area))
+			CalcIntensity(border, Processed_Stomata_IMG, Total=yes, CalcStdDev=yes)
+			CalcArea(border, AutoRecalc=yes)
+			ObjectFilter(border_area < 350)
+			CalcAttr(AVG_Border_Intensity, (border_intensity/border_area))
+			Delete(Intensity_Body_Threshold)
+			Set(Intensity_Body_Threshold = objects.AVG_Body_Intensity.mean) // get rid of bright image objects
+			Delete(Intensity_Border_Threshold)
+			Set(Intensity_Border_Threshold = objects.AVG_Border_Intensity.mean) // get rid of bright image objects
+			CalcAttr(Intensity_Diff, AVG_Body_Intensity / AVG_Border_Intensity)
+			// Filtering based on the intenstiy difference	
+	
+			ObjectFilter(AVG_Body_Intensity <= Intensity_Body_Threshold * 3.25 && AVG_Body_Intensity >= Intensity_Body_Threshold * 0.215)
+			ObjectFilter((AVG_Border_Intensity <= Intensity_Border_Threshold * 2.5 && AVG_Border_Intensity >= Intensity_Border_Threshold * 0.6) || (AVG_Border_Intensity <= Intensity_Border_Threshold * 2.5 && AVG_Border_Intensity >= Intensity_Border_Threshold * 0.425 && area < 825)) 
+			// to allow some of the middle size stomata pass through the filtering, if an image has many bright stomata 
+
+			// remove wrongly detected stomata 
+			CalcWidthLength()	
+			CalcAttr(WL_Ratio, half_width/full_length) // this should be 2 * half_width in the future
+			ObjectFilter(WL_Ratio > IN_MinRatioWL && WL_Ratio < IN_MaxRatioWL)	
+			ObjectFilter(full_length < 125)
+			RobatzekProcs::CalcRoundnessCorrected(objects=objects)	
+			ObjectFilter(roundnesscorrected > IN_MinRoundness && roundnesscorrected < IN_MaxRoundness) //Filtering flat-shape objects
+			CalcAttr(Small_Stomata, 0)
+			CalcAttr(Inner_Length, 0.0)
+			CalcAttr(Inner_Width, 0.0)
+			CalcAttr(Shape_Metric, 4*pi*area/(border_area^2))
+	
+			If(objects.@count > 0)
+				set(Obj_Counter = 0)
+				Foreach(0..(objects.@count-1), Obj_Counter)
+				// Find small stomata
+					If(objects.area[Obj_Counter] < IN_Min_StomataArea * 7.25 && objects.full_length[Obj_Counter] < IN_MaxHalfWidth * 1.125 && objects.roundnesscorrected[Obj_Counter] > 0.85) // 35 * 1.125
+						Set(objects.Small_Stomata[Obj_Counter] = 1)					
+					End()
+				End()
+			End()
+	
+			// Based on intensity difference
+			// 1. big stomata; 2. big close stomata; 3. small stomata; 4. normal small stomata
+			ObjectFilter(!(area > IN_Min_StomataArea * 10.25 && (Intensity_Diff > 0.95))) // was 0.905 before
+			ObjectFilter(!(area <= IN_Min_StomataArea * 10.25 && ((half_width < 9 && full_length > 37.5 && full_length < 85 && AVG_Border_Intensity > Intensity_Border_Threshold * 0.75) && Intensity_Diff >= 1.025) || ((full_length <= 37.5 && half_width < 9 && RoundnessCorrected > 0.7) && Intensity_Diff >= 1.05) || ((full_length <= 37.5 && half_width < 9 && RoundnessCorrected <= 0.7) && Intensity_Diff >= 0.875) || ((full_length >= 85 && half_width >= 9) && Intensity_Diff >= 0.95) || (full_length < 85 && half_width >= 9) && Intensity_Diff >= 0.95))
+
+			//exceptional cases 
+			ObjectFilter(!(area <= IN_Min_StomataArea * 10.25 && area > IN_Min_StomataArea * 3.5 && (half_width < 9 && full_length > 25 && full_length < 85 && AVG_Border_Intensity < Intensity_Border_Threshold && Intensity_Diff >= 0.975)))
+			ObjectFilter(!(area <= IN_Min_StomataArea * 10.25 && area > IN_Min_StomataArea * 3.5 && (half_width < 9 && full_length > 25 && full_length < 85 && Shape_Metric <0.325 && Intensity_Diff >= 0.925)))
+			ObjectFilter(!(area <= IN_Min_StomataArea * 3.5 && (half_width < 9 && full_length < 25 && Intensity_Diff > 0.985)))
+			ObjectFilter(!(area <= IN_Min_StomataArea * 3.5 && (half_width < 9 && full_length > 25 && full_length < 85 && roundnesscorrected <0.7 && Intensity_Diff > 0.85)))
+			ObjectFilter(!(area > IN_Min_StomataArea * 10.25 && Intensity_Diff > 0.875 && AVG_Border_Intensity < Intensity_Border_Threshold * 0.85)) // get rid of big stomata with lower outer layers
+			ObjectFilter(!(area > IN_Min_StomataArea * 10.25 && Shape_Metric < 0.425 && (half_width > 12.5 && full_length > 75))) // get rid of big stomata with lower outer layers
+
+			// Based on shape metric
+			ObjectFilter(Shape_Metric >= 0.25 && Shape_Metric <= 1.75)	
+			//exceptional cases 
+			ObjectFilter(!(area <= IN_Min_StomataArea * 1.75 && full_length <= 37.5 && half_width <= 9 && Shape_Metric < 0.65))
+			RemoveBorderObjects(5) // as using the eroded image as the final mask
+
+			Set(Final_Output_Stomata_Obj = objects)
+			//*** Finish detecting Stomata and inner aperture ***//
+
+	
+			//***** Start to overlap with recognised Stomata
+			warning("Starting overlap detection between recognised stomata and inner layers...")
+			CalcStat("mean", Stencil = Cell_Inner_Layer_Final.body, Image = Final_Output_Stomata_Obj.body.image, AttrName="Overlap", objects = Cell_Inner_Layer_Final)
+			Delete(Overlapped_Inner_Layer_Obj)
+			Set(Overlapped_Inner_Layer_Obj = objects)
+			ObjectFilter(overlap > 0, objects = Overlapped_Inner_Layer_Obj) 
+			Set(Overlapped_Inner_Layer_Obj = objects)
+	
+			// Start to filter for small stomata and detect the innner width of a stoma		
+			If(Final_Output_Stomata_Obj.@count > 0)
+				set(Obj_Counter = 0)
+				Foreach(0..(Final_Output_Stomata_Obj.@count-1), Obj_Counter)
+					CalcStat("mean", Stencil = Cell_Inner_Layer_Final.body, Image = Final_Output_Stomata_Obj[Obj_Counter].body.image, AttrName="Overlap", objects = Cell_Inner_Layer_Final)
+					Delete(Temp_Inner_Layer_Obj)
+					Set(Temp_Inner_Layer_Obj = objects)
+					ObjectFilter(overlap > 0, objects=Temp_Inner_Layer_Obj) 
+					If(objects.@count > 0)
+						// find the overlapped inner layer object, multiple objects are possible
+						Set(Final_Output_Stomata_Obj.Inner_Width[Obj_Counter] = objects.Measure_Width.max) 
+						// Using mean will return the maximum inner width 
+						// if multiple inner layers are overlapped with one Stomata object					
+						// Using the top spot1 and top spot 2 to calculate the length
+						set(Inner_Obj_Counter = 0)
+						Set(Inner_Top_Min = 0)
+						Set(Inner_Bottom_Max = 0)	
+						Set(Trigger_TOP_Spot_1 = 1)
+						Set(Trigger_Bottom_Spot_1 = 1)
+						Set(Inner_top_x = 0)
+						Set(Inner_top_y = 0)
+						Set(Inner_bottom_x = 0)
+						Set(Inner_bottom_y = 0)
+						// Find the top spot
+						Set(Inner_Top_Min = objects.top_spot1.y.target.min)
+						If(Inner_Top_Min > objects.top_spot2.y.target.min)
+							Set(Inner_Top_Min = objects.top_spot2.y.target.min)
+							Set(Trigger_TOP_Spot_1 = 0)
+						End()
+						// Find the bottom spot
+						set(Inner_Bottom_Max = objects.top_spot1.y.target.max)
+						If(Inner_Bottom_Max < objects.top_spot2.y.target.max)
+							Set(Inner_Bottom_Max = objects.top_spot2.y.target.max)
+							Set(Trigger_Bottom_Spot_1 = 0)
+						End()
+						// In case top spot 1 and top spot 2 have same y cooridnates
+						If(Inner_Top_Min == objects.top_spot2.y.target.min)
+							Set(Inner_Top_Min = objects.top_spot2.y.target.min)
+							Set(Trigger_TOP_Spot_1 = 0)
+						End()
+	
+						// Start to find the coordinate of the top spot 
+						Foreach(0..(objects.@count-1), Inner_Obj_Counter)
+							If(Trigger_TOP_Spot_1)
+								If(objects.top_spot1.y.target[Inner_Obj_Counter] == Inner_Top_Min)
+									Set(Inner_top_x = objects.top_spot1.x.target[Inner_Obj_Counter])
+									Set(Inner_top_y = objects.top_spot1.y.target[Inner_Obj_Counter])
+								End() // Find the coordinate for the top spot
+								If(!Trigger_Bottom_Spot_1)
+									If(objects.top_spot2.y.target[Inner_Obj_Counter] == Inner_Bottom_Max)
+										Set(Inner_bottom_x = objects.top_spot2.x.target[Inner_Obj_Counter])
+										Set(Inner_bottom_y = objects.top_spot2.y.target[Inner_Obj_Counter])
+									End()
+								Else()
+									If(objects.top_spot1.y.target[Inner_Obj_Counter] == Inner_Bottom_Max)
+										Set(Inner_bottom_x = objects.top_spot1.x.target[Inner_Obj_Counter])
+										Set(Inner_bottom_y = objects.top_spot1.y.target[Inner_Obj_Counter])
+									End()
+								End()
+							Else()
+								If(objects.top_spot2.y.target[Inner_Obj_Counter] == Inner_Top_Min)
+									Set(Inner_top_x = objects.top_spot2.x.target[Inner_Obj_Counter])
+									Set(Inner_top_y = objects.top_spot2.y.target[Inner_Obj_Counter])
+								End()	
+								If(!Trigger_Bottom_Spot_1)
+									If(objects.top_spot2.y.target[Inner_Obj_Counter] == Inner_Bottom_Max)
+										Set(Inner_bottom_x = objects.top_spot2.x.target[Inner_Obj_Counter])
+										Set(Inner_bottom_y = objects.top_spot2.y.target[Inner_Obj_Counter])
+									End()
+								Else()
+									If(objects.top_spot1.y.target[Inner_Obj_Counter] == Inner_Bottom_Max)
+										Set(Inner_bottom_x = objects.top_spot1.x.target[Inner_Obj_Counter])
+										Set(Inner_bottom_y = objects.top_spot1.y.target[Inner_Obj_Counter])
+									End()
+								End()
+							End()
+						End()
+						// Calculate the inner length
+						Set(Final_Output_Stomata_Obj.Inner_Length[Obj_Counter] = sqrt(((Inner_top_x - Inner_bottom_x)^2) + ((Inner_top_y - Inner_bottom_y)^2))) 		
+					Else()
+						Set(Final_Output_Stomata_Obj.Inner_Width[Obj_Counter] = 0) 
+						// no black pixels can be detected inside the stoma
+					End()
+				End()
+			End()
+			///** Overlapping detection finishes **///		
+		End()
+
+	//*** STEP 4: Start to output final results ***//		
+		if(Final_Output_Stomata_Obj.@count >= 3 && !BadStacks) //NO need to continue if less than three stomata have been found
+	// *** Step 4.1: add function for look into stomata cluster
+			set(Obj_Counter = 0)
+			Set(DrawLine_Stomata_IMG = Processed_Stomata_IMG)
+			Set(DrawLine_Stomata_IMG_Small = Processed_Stomata_IMG)
+			Set(Stomata_Distance = 0)
+
+			If(Output_Stomata_Cluster == 1) // Start to decte stomata network
+				create("vector", "int")
+				Set(Stomata_Org_ID = vector)
+				Set(Stomata_Org_ID_Small = vector)
+				Set(Stomata_Connected_ID = vector)
+				Set(Stomata_Connected_ID_Small = vector)
+				create("vector", "float")
+				Set(Stomata_Distance_Vec = vector)
+				Set(Stomata_Distance_Vec_Small = vector)
+
+				set(IM_Height_Expanded = Expanded_Stomata_IMG.height)
+				set(IM_Width_Expanded = Expanded_Stomata_IMG.width)
+				Blank(IM_Width_Expanded, IM_Height_Expanded)
+				set(Cluster_Network_IMG = image) // Create a blank image
+				set(Cluster_Network_IMG_Small = image) // Create a blank image
+						
+				Foreach(0..(Final_Output_Stomata_Obj.@count - 1), Obj_Counter)
+					Set(Current_Centre_Spot = Obj_Counter)
+					set(Obj_Distance_Counter = 0)
+					Foreach(0..(Final_Output_Stomata_Obj.@count - 1), Obj_Distance_Counter)
+						if(Obj_Distance_Counter != Current_Centre_Spot)
+							// Calculate the distance
+							Set(Stomata_Distance = sqrt((Final_Output_Stomata_Obj.center_spot.x.target[Current_Centre_Spot] - Final_Output_Stomata_Obj.center_spot.x.target[Obj_Distance_Counter])^2 + (Final_Output_Stomata_Obj.center_spot.y.target[Current_Centre_Spot] - Final_Output_Stomata_Obj.center_spot.y.target[Obj_Distance_Counter]) ^2))
+	
+							If(Stomata_Distance <= Network_Threshold) // Change the stomata distance
+								DrawLine(point(Final_Output_Stomata_Obj.center_spot.x.target[Current_Centre_Spot], Final_Output_Stomata_Obj.center_spot.y.target[Current_Centre_Spot]), point(Final_Output_Stomata_Obj.center_spot.x.target[Obj_Distance_Counter], Final_Output_Stomata_Obj.center_spot.y.target[Obj_Distance_Counter]), color="white", image=DrawLine_Stomata_IMG)
+								Set(DrawLine_Stomata_IMG = image)	
+
+								DrawLine(point(Final_Output_Stomata_Obj.center_spot.x.target[Current_Centre_Spot], Final_Output_Stomata_Obj.center_spot.y.target[Current_Centre_Spot]), point(Final_Output_Stomata_Obj.center_spot.x.target[Obj_Distance_Counter], Final_Output_Stomata_Obj.center_spot.y.target[Obj_Distance_Counter]), "intensity", 215, "yellow", image=Cluster_Network_IMG)
+								// generate LINKS with DETERMINED coordinates  
+								OR(image, image = Cluster_Network_IMG)
+								set(Cluster_Network_IMG = image)
+
+								// finished with the output file																					
+								push(Stomata_Org_ID, Current_Centre_Spot) // data appended
+								push(Stomata_Connected_ID, Obj_Distance_Counter) // data appended
+								push(Stomata_Distance_Vec, Stomata_Distance) // data appended
+							End()
+						End()
+					End()
+				End()
+				
+				If(Small_Stomata_Cluster)	
+					///**** Small stomata clustering ****///
+					ObjectFilter(Small_Stomata == 1, objects = Final_Output_Stomata_Obj)
+					Set(Output_Stomata_Small = objects)
+			
+					Delete(Obj_Counter)
+					Delete(Obj_Distance_Counter)
+					Foreach(0..(Output_Stomata_Small.@count - 1), Obj_Counter)
+						Set(Current_Centre_Spot = Obj_Counter)
+						set(Obj_Distance_Counter = 0)
+						Foreach(0..(Output_Stomata_Small.@count - 1), Obj_Distance_Counter)
+							if(Obj_Distance_Counter != Current_Centre_Spot)
+								// Calculate the distance
+								Set(Stomata_Distance_Small = sqrt((Output_Stomata_Small.center_spot.x.target[Current_Centre_Spot] - Output_Stomata_Small.center_spot.x.target[Obj_Distance_Counter])^2 + (Output_Stomata_Small.center_spot.y.target[Current_Centre_Spot] - Output_Stomata_Small.center_spot.y.target[Obj_Distance_Counter]) ^2))
+		
+								//If(Stomata_Distance_Small <= Network_Threshold * 3.25) // Change the stomata distance
+									DrawLine(point(Output_Stomata_Small.center_spot.x.target[Current_Centre_Spot], Output_Stomata_Small.center_spot.y.target[Current_Centre_Spot]), point(Output_Stomata_Small.center_spot.x.target[Obj_Distance_Counter], Output_Stomata_Small.center_spot.y.target[Obj_Distance_Counter]), color="white", image=DrawLine_Stomata_IMG_Small)
+									Set(DrawLine_Stomata_IMG_Small = image)		
+									DrawLine(point(Output_Stomata_Small.center_spot.x.target[Current_Centre_Spot], Output_Stomata_Small.center_spot.y.target[Current_Centre_Spot]), point(Output_Stomata_Small.center_spot.x.target[Obj_Distance_Counter], Output_Stomata_Small.center_spot.y.target[Obj_Distance_Counter]), "intensity", 215, "yellow", image=Cluster_Network_IMG_Small)
+									// generate LINKS with DETERMINED coordinates  
+									OR(image, image = Cluster_Network_IMG_Small)
+									set(Cluster_Network_IMG_Small = image)
+	
+									// finished with the output file																					
+									push(Stomata_Org_ID_Small, Current_Centre_Spot) // data appended
+									push(Stomata_Connected_ID_Small, Obj_Distance_Counter) // data appended
+									push(Stomata_Distance_Vec_Small, Stomata_Distance_Small) // data appended
+								//End()
+							End()
+						End()
+					End()
+				End()
+
+				// Start to detect stomata cluster
+				Mask2Stencil(Cluster_Network_IMG)
+				Stencil2Objects()
+				CalcErosion(-2, objects = objects, Stencil = stencil) // increasing 2 pixels
+				RenameAttr(body = stencil_eroded)
+				Mask2Stencil(objects.body.mask.image)
+				Stencil2Objects(Neighbourhood=8)
+				Set(Stomata_Cluster_Obj = objects)			
+
+				// Start to detect stomata cluster
+				Mask2Stencil(Cluster_Network_IMG_Small)
+				Stencil2Objects()
+				CalcErosion(-2, objects = objects, Stencil = stencil) // increasing 2 pixels
+				RenameAttr(body = stencil_eroded)
+				Mask2Stencil(objects.body.mask.image)
+				Stencil2Objects(Neighbourhood=8)
+				Set(Stomata_Cluster_Obj_Small = objects)		
+			End()
+
+			if(ShowIllustrations)
+				//*** Preview images 
+				imageview(Final_Output_Stomata_Obj.border,"Recongised stomata in stack_"&_StackCounter, title="Total Stomata", gamma=1.25, image=Processed_Stomata_IMG, middlecolor=rgb(0x00,0xff,0x00))				
+			End()
+
+			//*** Output images
+			set( namelength = length( imagefilename1 ) )
+			set( corename = substr( imagefilename1, 1, namelength - 5) )
+			
+			// Max projection
+			Gamma(1.25, image=Processed_Stomata_IMG)
+			WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-1_Max_Projection.png", image=Image, imageformat="png")
+			
+			// Total Stomata output images
+			Gamma(1.25, image=Processed_Stomata_IMG)
+			CarryObjects(Final_Output_Stomata_Obj.body, image.max)
+			CarryObjects(Final_Output_Stomata_Obj.body, "Rainbow")
+			WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-2_Recongised_Stomata.png", image=Image, imageformat="png")	
+
+			// Stomata Inner Layers output images
+			Gamma(1.25, image=Processed_Stomata_IMG)
+			CarryObjects(Final_Output_Stomata_Obj.border, image.max)
+			CarryObjects(Final_Output_Stomata_Obj.border, "Red")
+			CarryObjects(Overlapped_Inner_Layer_Obj.body, image.max)
+			CarryObjects(Overlapped_Inner_Layer_Obj.body, "green")
+			WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-3_Stomata_With_Inner_Layers.png", image=Image, imageformat="png")
+		
+			If(Final_Output_Stomata_Obj.Small_Stomata.mean != 0)
+				// output images for small stomata		
+				ObjectFilter(Small_Stomata == 1, objects = Final_Output_Stomata_Obj)
+				Gamma(1.25, image=Processed_Stomata_IMG)
+				CarryObjects(objects.border, image.max)
+				CarryObjects(objects.border, "Red")
+				WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-4_Small_Stomata.png", image=Image, imageformat="png")
+			End()
+			
+			if(Output_Stomata_IDX)
+				// Output Stomata Index
+				set(Cell_Counter = 0)
+				set(IM_Height_Expanded = Expanded_Stomata_IMG.height)
+				set(IM_Width_Expanded = Expanded_Stomata_IMG.width)
+				Blank(IM_Width_Expanded, IM_Height_Expanded)
+				set(Labelled_IMG = image) // Create a blank image
+
+				Foreach(0..Final_Output_Stomata_Obj.@count - 1, Cell_Counter)					
+					Text2Image(Final_Output_Stomata_Obj.center_spot.x.target[Cell_Counter], Final_Output_Stomata_Obj.center_spot.y.target[Cell_Counter] - 5, (Cell_Counter + 1), border_color="none", fontsize= 24, image=Labelled_IMG)
+					// generate cell indices with adjusted coordinates  
+					OR(image, image = Labelled_IMG)
+					set(Labelled_IMG = image)
+					// finished with the output file
+				End()				
+				set(Labelled_IMG = image)
+				//Mask2Stencil(Labelled_IMG, "One large object")
+				Gamma(1.25, image=Processed_Stomata_IMG)
+				CarryObjects(Final_Output_Stomata_Obj.border, image.max)
+				CarryObjects(Final_Output_Stomata_Obj.border, "red")
+				
+				// Start to build stencil for outputing labels 
+				Mask2Stencil(Labelled_IMG)		
+				CarryObjects(Stencil, image.max)
+				CarryObjects(Stencil, "white")
+				WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-5_Labelled_Cells.png", image=Image, imageformat="png")
+			End()
+			// Output cluster results
+			If(Output_Stomata_Cluster == 1) 
+				// output images for small stomata		
+				Gamma(1.25, image=Processed_Stomata_IMG)
+				CarryObjects(Final_Output_Stomata_Obj.border, image.max)
+				CarryObjects(Final_Output_Stomata_Obj.border, "Red")
+				CarryObjects(Stomata_Cluster_Obj.body, image.max)
+				CarryObjects(Stomata_Cluster_Obj.body, "rainbow")
+				WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-6_Stomata_Cluster.png", image=Image, imageformat="png")
+			End()
+
+			If(Small_Stomata_Cluster) 
+				// output images for small stomata		
+				Gamma(1.25, image=Processed_Stomata_IMG)
+				CarryObjects(Final_Output_Stomata_Obj.border, image.max)
+				CarryObjects(Final_Output_Stomata_Obj.border, "Red")
+				CarryObjects(Stomata_Cluster_Obj_Small.body, image.max)
+				CarryObjects(Stomata_Cluster_Obj_Small.body, "rainbow")
+				WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-7_Small_Stomata_Cluster.png", image=Image, imageformat="png")
+			End()
+			// Finisih outputing images		
+
+		Else()
+			Warning("The script did not find enough valid stmoata - analysis abort!")	
+			set(BadStacks = 1)
+			//*** Output max projection images
+			set( namelength = length( imagefilename1 ) )
+			set( corename = substr( imagefilename1, 1, namelength - 5) )			
+			// Max projection
+			Gamma(1.5, image=Processed_Stomata_IMG)
+			WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-1_Max_Projection.png", image=Image, imageformat="png")
+		End()			
+
+//*** STEP 5: Output results and carry over detected stomata ***//		
+		if(Final_Output_Stomata_Obj.@count >= 3 && !BadStacks)
+			// Output the preliminary statistics  
+			output(Final_Output_Stomata_Obj.@count, "Total number of stomata in stack " &_StackCounter )
+			ObjectFilter(Small_Stomata == 1, objects = Final_Output_Stomata_Obj)
+			output(objects.@count, "The number of small stomata in stack " &_StackCounter)     
+			// finish outputing resutls   
+			output("**********", "----- Line Break Stack " & _StackCounter&" -----") 
+			
+			set(Obj_Counter = 0)
+			Foreach(0..(Final_Output_Stomata_Obj.@count-1), Obj_Counter)
+				// Start to build up the output table
+				printfopen(pathname & "_Results.csv", yes)	
+				Printf("R" & Images_CH1.Row[0] & " C"& Images_CH1.Column[0] & "#")
+				Printf(Images_CH1.AreaName[0] & "#")
+				Printf( _StackCounter & "#")
+				Printf((Obj_Counter+1) & "#")
+	
+				If(Final_Output_Stomata_Obj.Small_Stomata[Obj_Counter])
+					Printf( 0 & "#") // not a normal stoma
+					Printf( 1 & "#") // a small stoma
+				Else()
+					Printf( 1 & "#")
+					Printf( 0 & "#")
+				End()
+	
+				Printf(Final_Output_Stomata_Obj.area[Obj_Counter] & "#")
+				Printf(Final_Output_Stomata_Obj.RoundnessCorrected[Obj_Counter] & "#")
+				Printf(Final_Output_Stomata_Obj.half_width[Obj_Counter] * 2 & "#")
+				Printf(Final_Output_Stomata_Obj.full_length[Obj_Counter] & "#")
+				Printf(Final_Output_Stomata_Obj.Inner_Width[Obj_Counter] & "#")
+				Printf(Final_Output_Stomata_Obj.Inner_Length[Obj_Counter] & "#")
+				Printf(Final_Output_Stomata_Obj.full_length[Obj_Counter] * 0.8 & "#") // calculated inner length
+
+				// Output cluster results
+				If(Output_Stomata_Cluster == 1) 
+					Printf(Stomata_Cluster_Obj.@count & "#")
+					Printf(Stomata_Distance_Vec.mean & "#")
+					Printf(Stomata_Distance_Vec.size & "#")
+				End()
+
+				Printf(Images_CH1.ImageResolutionX@um[0]/2 & "#\n")
+				printfopen() 
+			End()
+			// Finish producing the output file
+		Else()
+			Warning("The script cannot find enough valid stmoata on the image - analysis abort!")	
+				
+			// Output images
+			set( namelength = length( imagefilename1 ) )
+			set( corename = substr( imagefilename1, 1, namelength - 5) )
+				
+			// Max projection
+			Gamma(1.25, image=Processed_Stomata_IMG)
+			WriteImage(imagefile=corename & "_stack_" & _StackCounter & "-1_Max_Projection.png", image=Image, imageformat="png")
+			
+			// output the results
+			output(NAN, "Total number of stomata in stack " &_StackCounter )
+			output(NAN, "The number of small stomata in stack " &_StackCounter)      
+			// finish outputing resutls   
+			output("**********", "----- Line Break Stack " & _StackCounter&" -----") 
+	
+			// Start to build up the output table
+			printfopen(pathname & "_Results.csv", yes)	
+			Printf("R" & Images_CH1.Row[0] & " C"& Images_CH1.Column[0] & "#")
+			Printf(Images_CH1.AreaName[0] & "#")
+			Printf( _StackCounter & "#")
+			Printf( NAN & "#") // not a number
+			Printf( NAN & "#") // not a number
+			Printf( NAN & "#") // not a number	
+			Printf( NAN & "#") // not a number	
+			Printf( NAN & "#") // not a number
+			Printf( NAN & "#") // not a number
+			Printf( NAN & "#") // not a number
+			Printf( NAN & "#") // not a number
+			Printf( NAN & "#") // not a number
+			Printf( NAN & "#") // not a number
+
+			// Output cluster results
+			If(Output_Stomata_Cluster == 1) 
+				Printf( NAN & "#") // not a number
+				Printf( NAN & "#") // not a number	
+				Printf( NAN & "#") // not a number
+			End()
+			Printf(Images_CH1.ImageResolutionX@um[0]/2 & "#\n")
+			printfopen() 
+		End()			
+	End() // finish detecting and output results for one stack
+
+	If(!BadStacks)
+		If(Final_Output_Stomata_Obj.@count > 1)
+			// Start to build up overall results
+			printfopen(pathname & "_" & Output_File  & ".csv", yes)
+			//printfopen(Overall_pathname & "/" & Output_File  & ".csv", yes)
+			Printf("R" & Images_CH1.Row[0] & " C"& Images_CH1.Column[0] & "#")
+			Printf(Images_CH1.AreaName[0] & "#")
+			Printf( _StackCounter & "#")
+			Printf(Final_Output_Stomata_Obj.@count & "#")
+			Printf(Final_Output_Stomata_Obj.Small_Stomata.sum & "#")
+			Printf(Final_Output_Stomata_Obj.half_width.mean * 2 & "#")
+			Printf(Final_Output_Stomata_Obj.full_length.mean & "#")
+			Printf(Final_Output_Stomata_Obj.Inner_Width.mean & "#")
+			Printf(Final_Output_Stomata_Obj.Inner_Length.mean & "#")
+			Printf(Images_CH1.ImageResolutionX@um[0]/2 & "#\n")
+			printfopen() 
+			// End of producing overall results
+		Else()
+			// Start to build up overall results
+			printfopen(pathname & "_" & Output_File  & ".csv", yes)
+			//printfopen(Overall_pathname & "/" & Output_File  & ".csv", yes)
+			Printf("R" & Images_CH1.Row[0] & " C"& Images_CH1.Column[0] & "#")
+			Printf(Images_CH1.AreaName[0] & "#")
+			Printf( _StackCounter & "#")
+			Printf(nan & "#")
+			Printf(nan & "#")
+			Printf(nan& "#")
+			Printf(nan & "#")
+			Printf(nan & "#")
+			Printf(nan & "#")
+			Printf(Images_CH1.ImageResolutionX@um[0]/2 & "#\n")
+			printfopen() 
+			// End of producing overall results
+		End()
+	Else()
+		// Start to build up overall results
+		printfopen(pathname & "_" & Output_File  & ".csv", yes)
+		//printfopen(Overall_pathname & "/" & Output_File  & ".csv", yes)
+		Printf("R" & Images_CH1.Row[0] & " C"& Images_CH1.Column[0] & "#")
+		Printf(Images_CH1.AreaName[0] & "#")
+		Printf( _StackCounter & "#")
+		Printf(nan & "#")
+		Printf(nan & "#")
+		Printf(nan& "#")
+		Printf(nan & "#")
+		Printf(nan & "#")
+		Printf(nan & "#")
+		Printf(Images_CH1.ImageResolutionX@um[0]/2 & "#\n")
+		printfopen() 
+		// End of producing overall results
+	End()
+
+End()// end of loop over stacks
