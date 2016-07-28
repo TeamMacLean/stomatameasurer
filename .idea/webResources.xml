@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebResourcesPaths">
+    <contentEntries>
+      <entry url="file://$PROJECT_DIR$">
+        <entryData>
+          <resourceRoots>
+            <path value="file://$PROJECT_DIR$/Test images and output" />
+            <path value="file://$PROJECT_DIR$/Test images and output/Ok" />
+            <path value="file://$PROJECT_DIR$/Test images and output/With mis-detection" />
+            <path value="file://$PROJECT_DIR$/test_data/With mis-detection" />
+            <path value="file://$PROJECT_DIR$/test_data/Ok" />
+          </resourceRoots>
+        </entryData>
+      </entry>
+    </contentEntries>
+  </component>
+</project>
