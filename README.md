@@ -1,6 +1,6 @@
 # stomatadetector
 
-A package for detecting and quantifying attributes stomata objects in fluorescence images in FLEX or TIF format. 
+A package for detecting and quantifying attributes of stomata objects in fluorescence images in FLEX or TIF format. 
 
 ## Installation
 

@@ -9,11 +9,12 @@ setup(name='stomatadetector',
       version='0.0.1dev',
       description='Stomata detection from FLEX/TIFF fluorescent images',
       long_description=readme(),
+      url='https://github.com/TeamMacLean/stomatadetector',
       classifiers=[
         'Development Status :: 3 - Alpha',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3.5',
-        'Topic :: Image Processing :: Science',
+        'Topic :: Scientific/Engineering :: Image Recognition'
       ],
       author='Dan MacLean',
       author_email='dan.maclean@tsl.ac.uk',

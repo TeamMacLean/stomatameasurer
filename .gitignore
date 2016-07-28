@@ -8,3 +8,6 @@ NewOpera_Stomata_Detection_V2.17_Acapella.script
 .idea/*
 stomatadetector/__pycache__
 ipynbs_and_test_data/*
+dist/
+stomatadetector.egg-info
+*.pyc
