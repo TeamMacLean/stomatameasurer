@@ -5,6 +5,6 @@ NewOpera_Stomata_Detection_Distance_V2.19_Acapella.script
 NewOpera_Stomata_Detection_V2.17_Acapella.script
 .ipynb_checkpoints
 .DS_Store
-.idea
+.idea/*
 stomatadetector/__pycache__
-*.ipynb
+ipynbs_and_test_data/*
