@@ -293,9 +293,23 @@ class LeafImage(object):
         self.stomata_labels = np.zeros((10,10))
         self.stomata_objects = []
         self.metadata = None
+        self.treatment = None
+        self.well_coordinate = None
+        self.imaging_time = None
+        self.x_units = None
+        self.y_units = None
+        self.x_perpixel = None
+        self.y_perpixel = None
 
         if flex_file.endswith('flex'):
             self.metadata = FlexMetaData(flex_file)
+            self.treatment = self.metadata.metadata[0]['Root']['FLEX']['Well']['AreaName']
+            self.well_coordinate = self.metadata.metadata[0]['Root']['FLEX']['Well']['WellCoordinate']
+            self.imaging_time = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['DateTime']['#text']
+            self.x_units = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionX']['@Unit']
+            self.x_perpixel = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionX']['#text']
+            self.y_units = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionY']['@Unit']
+            self.y_perpixel = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionY']['#text']
 
         for func, val in image_options:
             if func == 'gamma':
@@ -329,6 +343,9 @@ class LeafImage(object):
 
     def object_count(self):
         return len(self.stomata_objects)
+
+    def custom_info(self):
+        return [self.treatment, self.well_coordinate, self.imaging_time, self.x_units, self.x_perpixel, self.y_units self.y_perpixel]
 
 
 
