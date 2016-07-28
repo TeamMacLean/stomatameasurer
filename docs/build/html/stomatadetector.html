@@ -25,13 +25,11 @@
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="top" title="stomatadetector 0.0.1 documentation" href="index.html" />
    
-  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   
   <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
 
   </head>
-  <body role="document">
-  
+  <body role="document">  
 
     <div class="document">
       <div class="documentwrapper">
@@ -43,17 +41,266 @@
 <div class="section" id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
 </div>
-<div class="section" id="stomatadetector-filebrowser-module">
-<h2>stomatadetector.filebrowser module<a class="headerlink" href="#stomatadetector-filebrowser-module" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-stomatadetector.filebrowser">
+<span id="stomatadetector-filebrowser-module"></span><h2>stomatadetector.filebrowser module<a class="headerlink" href="#module-stomatadetector.filebrowser" title="Permalink to this headline">¶</a></h2>
+<p>Module for implementing a rudimentary file chooser and file selection methods in Jupyter Notebooks</p>
+<dl class="class">
+<dt id="stomatadetector.filebrowser.FileBrowser">
+<em class="property">class </em><code class="descclassname">stomatadetector.filebrowser.</code><code class="descname">FileBrowser</code><a class="headerlink" href="#stomatadetector.filebrowser.FileBrowser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
+<p>Implements an ipywidgets directory chooser.
+Only shows directories.</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">f</span> <span class="o">=</span> <span class="n">FileBrowser</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span><span class="o">.</span><span class="n">widget</span><span class="p">()</span> <span class="c1"># activate the widget</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span><span class="o">.</span><span class="n">path</span> <span class="c1"># get the selected directory...</span>
+</pre></div>
 </div>
-<div class="section" id="stomatadetector-flexmetadata-module">
-<h2>stomatadetector.flexmetadata module<a class="headerlink" href="#stomatadetector-flexmetadata-module" title="Permalink to this headline">¶</a></h2>
+<dl class="method">
+<dt id="stomatadetector.filebrowser.FileBrowser.widget">
+<code class="descname">widget</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.filebrowser.FileBrowser.widget" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="stomatadetector.filebrowser.GetFlexList">
+<code class="descclassname">stomatadetector.filebrowser.</code><code class="descname">GetFlexList</code><span class="sig-paren">(</span><em>path</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.filebrowser.GetFlexList" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a list of files ending in <a href="#id1"><span class="problematic" id="id2">*</span></a>.flex in provided folder</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Param:</th><td class="field-body">path</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">list &#8211; filenames</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
 </div>
-<div class="section" id="stomatadetector-stomataobjects-module">
-<h2>stomatadetector.stomataobjects module<a class="headerlink" href="#stomatadetector-stomataobjects-module" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-stomatadetector.flexmetadata">
+<span id="stomatadetector-flexmetadata-module"></span><h2>stomatadetector.flexmetadata module<a class="headerlink" href="#module-stomatadetector.flexmetadata" title="Permalink to this headline">¶</a></h2>
+<p>Module for dealing with Multi-TIFF metadata in Perkin ELmer .flex files.</p>
+<dl class="class">
+<dt id="stomatadetector.flexmetadata.FlexMetaData">
+<em class="property">class </em><code class="descclassname">stomatadetector.flexmetadata.</code><code class="descname">FlexMetaData</code><span class="sig-paren">(</span><em>flex_filepath</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.flexmetadata.FlexMetaData" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
+<p>Implements an <cite>xmltodict</cite> object that contains .flex metadata</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Param:</th><td class="field-body">filename</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">xmltodict object - nested structure with data</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">flex_file</span> <span class="o">=</span> <span class="s1">&#39;/Users/user/test/002002002/002002002.flex&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">parse_flex_metadata</span><span class="p">(</span><span class="n">flex_file</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">metadata</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span><span class="p">(</span><span class="n">metadata</span><span class="p">[</span><span class="s1">&#39;Root&#39;</span><span class="p">][</span><span class="s1">&#39;Arrays&#39;</span><span class="p">][</span><span class="s1">&#39;Array&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">OrderedDict</span><span class="p">([(</span><span class="s1">&#39;@Type&#39;</span><span class="p">,</span> <span class="s1">&#39;Image&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;@Name&#39;</span><span class="p">,</span> <span class="s1">&#39;Exp1Cam2&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;@Width&#39;</span><span class="p">,</span> <span class="s1">&#39;688&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;@Height&#39;</span><span class="p">,</span> <span class="s1">&#39;512&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;@BitsPerPixel&#39;</span><span class="p">,</span> <span class="s1">&#39;16&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;@CompressionType&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;@CompressionRate&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;@Factor&#39;</span><span class="p">,</span> <span class="s1">&#39;1.000000&#39;</span><span class="p">)])</span>
+</pre></div>
 </div>
-<div class="section" id="module-contents">
-<h2>Module contents<a class="headerlink" href="#module-contents" title="Permalink to this headline">¶</a></h2>
+</dd></dl>
+
+</div>
+<div class="section" id="module-stomatadetector.stomataobjects">
+<span id="stomatadetector-stomataobjects-module"></span><h2>stomatadetector.stomataobjects module<a class="headerlink" href="#module-stomatadetector.stomataobjects" title="Permalink to this headline">¶</a></h2>
+<p>Module for segmenting stomata sub-images and related measurements from a .flex file</p>
+<dl class="class">
+<dt id="stomatadetector.stomataobjects.GetStomataObjects">
+<em class="property">class </em><code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">GetStomataObjects</code><span class="sig-paren">(</span><em>flex_file_name_list</em>, <em>options</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.GetStomataObjects" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
+<p>Gets list of LeafImage objects from a list of flex file names. Each file name provided returns a
+different LeafImage object. Each LeafImage object has an attribute <cite>stomata_objects</cite> that contains stomata information</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">analysed_flex_files</span> <span class="o">=</span> <span class="n">sd</span><span class="o">.</span><span class="n">GetStomataObjects</span><span class="p">(</span><span class="n">flex_file_names</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="method">
+<dt id="stomatadetector.stomataobjects.GetStomataObjects.extract_stomata">
+<code class="descname">extract_stomata</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.GetStomataObjects.extract_stomata" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="stomatadetector.stomataobjects.LeafImage">
+<em class="property">class </em><code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">LeafImage</code><span class="sig-paren">(</span><em>flex_file</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.LeafImage" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
+<p>represents the leaf image and the objects found in it from a single flex file</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Variables:</th><td class="field-body"><ul class="first last simple">
+<li><strong>flex_file</strong> &#8211; the flex file represented</li>
+<li><strong>mp</strong> &#8211; the maximum projection of the flex file</li>
+<li><strong>stomata_positions</strong> &#8211; the python Slice objects describing the sub images of the maximum projection containing detected stomata</li>
+<li><strong>binary_obj_img</strong> &#8211; a binary image of the objects</li>
+<li><strong>stomata_labels</strong> &#8211; a numpy label image of the stomata found</li>
+<li><strong>stomata_objects</strong> &#8211; list of StomataObject&#8217;s - one per detected stomate</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="stomatadetector.stomataobjects.StomataObject">
+<em class="property">class </em><code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">StomataObject</code><span class="sig-paren">(</span><em>max_proj_img_slice</em>, <em>stomata_pos</em>, <em>stomata_props</em>, <em>binary_obj_img</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.StomataObject" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
+<p>represents a single object, presumed to be a stomate from the segmented flex file</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Variables:</th><td class="field-body"><ul class="first last simple">
+<li><strong>detected_stomate</strong> &#8211; binary image of stomate</li>
+<li><strong>intensity_image</strong> &#8211; normal image of stomate</li>
+<li><strong>props</strong> &#8211; properties of stomata - calculated by skimage.measure.regionprops in original mp image</li>
+<li><strong>position_in_image</strong> &#8211; Python slice object describing the position in the original image</li>
+<li><strong>pore_binary_image</strong> &#8211; binary image of pore region</li>
+<li><strong>pore_props</strong> &#8211; properties of pore region - calculated by skimage.measure.regionprops - only first property list is returned if multiple objects are found.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="stomatadetector.stomataobjects.get_pore">
+<code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">get_pore</code><span class="sig-paren">(</span><em>img</em>, <em>margin=10</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.get_pore" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extracts darkest region from subimage - in context presumed to be the pore. Inverts the image and finds the brightest region.
+returns binary image in which pixels with value 1 are within margin percent of the image max. All other pixel
+values are 0.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>img</strong> (<em>numpy.ndarray</em>) &#8211; input image section</li>
+<li><strong>margin</strong> (<em>int</em>) &#8211; the percent of the inverted image maximum pixel value to take as the minimum pixel value for the pore</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">binary numpy.ndaarray</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="stomatadetector.stomataobjects.get_stomata">
+<code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">get_stomata</code><span class="sig-paren">(</span><em>max_proj_image</em>, <em>rescale_min=50</em>, <em>rescale_max=100</em>, <em>min_obj_size=100</em>, <em>max_obj_size=1000</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.get_stomata" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs image segmentation from a max_proj_image.
+Rescales the intensity of the image to between rescale_min and rescale_max. Disposes of objects in range min_obj_size to
+max_obj_size</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>max_proj_image</strong> (<em>numpy.ndarray, uint16</em>) &#8211; the maximum projection image</li>
+<li><strong>rescale_min</strong> (<em>int</em>) &#8211; minimum pixel intensity that values in image will be rescaled to</li>
+<li><strong>rescale_max</strong> (<em>int</em>) &#8211; maximum pixel intensity that values in image will be rescaled to</li>
+<li><strong>min_obj_size</strong> (<em>int</em>) &#8211; minimum size of object to keep</li>
+<li><strong>max_obj_size</strong> (<em>int</em>) &#8211; maximum size of object to keep</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"><dl class="docutils">
+<dt>list of [ [coordinates of kept objects - list of slice objects],</dt>
+<dd><p class="first last">binary object image - numpy.ndarray,
+labelled object image - numpy.ndarray</p>
+</dd>
+</dl>
+<p>]</p>
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="stomatadetector.stomataobjects.get_stomata_info">
+<code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">get_stomata_info</code><span class="sig-paren">(</span><em>stomata</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.get_stomata_info" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="stomatadetector.stomataobjects.imshow">
+<code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">imshow</code><span class="sig-paren">(</span><em>image</em>, <em>title='No Title'</em>, <em>cmap='hot'</em>, <em>width=36</em>, <em>height=36</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.imshow" title="Permalink to this definition">¶</a></dt>
+<dd><p>render image as a graphic</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>image</strong> (<em>numpy.ndarray</em>) &#8211; image to show</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="stomatadetector.stomataobjects.max_proj">
+<code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">max_proj</code><span class="sig-paren">(</span><em>img_list</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.max_proj" title="Permalink to this definition">¶</a></dt>
+<dd><p>maximum projection from a list of numpy ndarrays</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>img_list</strong> (<em>list</em>) &#8211; list of numpy ndarrays to merge</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">ndarray &#8211; the maximum projection of the list</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="stomatadetector.stomataobjects.maximum_project_flex">
+<code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">maximum_project_flex</code><span class="sig-paren">(</span><em>flex_file</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.maximum_project_flex" title="Permalink to this definition">¶</a></dt>
+<dd><p>maximum projection and rescaling of a flex_file for skimage.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>flex_file</strong> &#8211; the flex file to maximum project and rescale</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">numpy.ndarray maximum projection of all planes in the Flex file into one plane in &#8216;uint16&#8217; type.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="stomatadetector.stomataobjects.rescale">
+<code class="descclassname">stomatadetector.stomataobjects.</code><code class="descname">rescale</code><span class="sig-paren">(</span><em>img</em><span class="sig-paren">)</span><a class="headerlink" href="#stomatadetector.stomataobjects.rescale" title="Permalink to this definition">¶</a></dt>
+<dd><p>sets input image to type &#8216;uint16&#8217;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>img</strong> &#8211; image
+:type img: numpy.ndarray</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">numpy.ndarray &#8211; with type &#8216;unint16&#8217;</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="module-stomatadetector">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-stomatadetector" title="Permalink to this headline">¶</a></h2>
 </div>
 </div>
 
@@ -67,10 +314,10 @@
   <ul>
 <li><a class="reference internal" href="#">stomatadetector package</a><ul>
 <li><a class="reference internal" href="#submodules">Submodules</a></li>
-<li><a class="reference internal" href="#stomatadetector-filebrowser-module">stomatadetector.filebrowser module</a></li>
-<li><a class="reference internal" href="#stomatadetector-flexmetadata-module">stomatadetector.flexmetadata module</a></li>
-<li><a class="reference internal" href="#stomatadetector-stomataobjects-module">stomatadetector.stomataobjects module</a></li>
-<li><a class="reference internal" href="#module-contents">Module contents</a></li>
+<li><a class="reference internal" href="#module-stomatadetector.filebrowser">stomatadetector.filebrowser module</a></li>
+<li><a class="reference internal" href="#module-stomatadetector.flexmetadata">stomatadetector.flexmetadata module</a></li>
+<li><a class="reference internal" href="#module-stomatadetector.stomataobjects">stomatadetector.stomataobjects module</a></li>
+<li><a class="reference internal" href="#module-stomatadetector">Module contents</a></li>
 </ul>
 </li>
 </ul>
@@ -96,6 +343,9 @@
       <input type="hidden" name="check_keywords" value="yes" />
       <input type="hidden" name="area" value="default" />
     </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
 </div>
 <script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
@@ -106,8 +356,8 @@
       &copy;2016, Dan MacLean.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.4.1</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.7</a>
       
       |
       <a href="_sources/stomatadetector.txt"

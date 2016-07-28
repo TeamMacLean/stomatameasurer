@@ -1,3 +1,10 @@
 test_data/
 Test images and output/
 Test images and output.zip
+NewOpera_Stomata_Detection_Distance_V2.19_Acapella.script
+NewOpera_Stomata_Detection_V2.17_Acapella.script
+.ipynb_checkpoints
+.DS_Store
+.idea
+stomatadetector/__pycache__
+*.ipynb
