@@ -29,7 +29,7 @@ def rescale(img):
     :returns: numpy.ndarray -- with type 'uint16'
     """
     return exposure.rescale_intensity(img, in_range='uint16')
-    # TODO make sure uint scale is right one
+
 
 
 def maximum_project_flex(flex_file):
@@ -55,6 +55,9 @@ def imshow(image, title="No Title",cmap='hot', width=36,height=36, **kwargs):
     ax.set_title(title)
     plt.show()
 
+def imhist(flex,  bins=20, width=36,height=36, **kwargs):
+    plt.hist(flex.mp.ravel(), bins=bins, **kwargs)
+    plt.show()
 
 def is_dark_image(img,min_bright=100, prop=0.1):
     """work out if too few pixels pass a brightness threshold
@@ -247,7 +250,9 @@ def rescale_intensity(img, val=None):
 def clip(img, range):
     return exposure.rescale_intensity(img, in_range=range)
 
-
+def custom_report(flex, stomata):
+    props = [str(x) for x in flex.sample_info()] + [str(flex.object_count()) ] + [str(x) for x in stomata.stoma_info() ]
+    return ",".join(props)
 
 class GetStomataObjects(object):
     """Gets list of LeafImage objects from a list of flex file names. Each file name provided returns a
@@ -304,12 +309,14 @@ class LeafImage(object):
         if flex_file.endswith('flex'):
             self.metadata = FlexMetaData(flex_file)
             self.treatment = self.metadata.metadata[0]['Root']['FLEX']['Well']['AreaName']
-            self.well_coordinate = self.metadata.metadata[0]['Root']['FLEX']['Well']['WellCoordinate']
+            self.plate_row = self.metadata.metadata[0]['Root']['FLEX']['Well']['WellCoordinate']['@Row']
+            self.plate_column = self.metadata.metadata[0]['Root']['FLEX']['Well']['WellCoordinate']['@Col']
             self.imaging_time = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['DateTime']['#text']
             self.x_units = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionX']['@Unit']
             self.x_perpixel = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionX']['#text']
             self.y_units = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionY']['@Unit']
             self.y_perpixel = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionY']['#text']
+            self.stack = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['Sublayout']['#text']
 
         for func, val in image_options:
             if func == 'gamma':
@@ -344,12 +351,11 @@ class LeafImage(object):
     def object_count(self):
         return len(self.stomata_objects)
 
-    def custom_info(self):
-        return [self.treatment, self.well_coordinate, self.imaging_time, self.x_units, self.x_perpixel, self.y_units self.y_perpixel]
+    def sample_info(self):
+        return [self.treatment, self.plate_row, self.plate_column,  self.imaging_time, self.x_units, self.x_perpixel, self.y_units, self.y_perpixel, self.stack]
 
 
 
-    # TODO make flex metadata exportable.
 
 class StomataObject(object):
     """represents a single object, presumed to be a stomate from the segmented flex file
@@ -389,3 +395,6 @@ class StomataObject(object):
         h = ((a - b)**2)/((a + b)**2)
         c = 1 + ((3*h) / (10 + math.sqrt(4 + (3 * h) ) ) )
         return (math.pi * (a+b) * c)
+
+    def stoma_info(self):
+        return [self.label, self.props.area, self.roundness(), self.props.major_axis_length, self.props.minor_axis_length ]
