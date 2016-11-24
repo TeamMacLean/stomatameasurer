@@ -108,7 +108,7 @@ def edge_objects(l, margin=3):
     :return: list
 
     """
-    ls = [l[:, 0:10].flatten(), l[:, -10:].flatten(), l[0:10, :].flatten(), l[-10:, :].flatten()]
+    ls = [l[:, 0:margin].flatten(), l[:, -margin:].flatten(), l[0:margin, :].flatten(), l[-margin:, :].flatten()]
     return list(set([item for sublist in ls for item in sublist]))
 
 def long_objects(leaf_image_obj, ratio=3):
@@ -152,9 +152,7 @@ def delete_border_objects(leaf_image_obj,margin=3):
     delete_objects(leaf_image_obj, border_obj)
 
 
-
-
-def get_stomata(max_proj_image, max_obj_size=1000, min_obj_size=200):
+def get_stomata(max_proj_image, min_obj_size=200, max_obj_size=1000):
     """Performs image segmentation from a max_proj_image.
      Disposes of objects in range min_obj_size to
     max_obj_size
@@ -171,6 +169,22 @@ def get_stomata(max_proj_image, max_obj_size=1000, min_obj_size=200):
                      ]
 
     """
+
+    # pore_margin = 10
+    # max_obj_size = 1000
+    # min_obj_size = 200
+    # for prop, value in segment_options:
+    #     if prop == 'pore_margin':
+    #         pore_margin = value
+    #     if prop == 'max_obj_size':
+    #         max_obj_size = value
+    #     if prop == 'min_obj_size':
+    #         min_obj_size = value
+    #
+    # print(pore_margin)
+    # print(max_obj_size)
+    # print(min_obj_size)
+
     #rescale_min = 50
     #rescale_max= 100
     #rescaled = exposure.rescale_intensity(max_proj_image, in_range=(rescale_min,rescale_max))
@@ -199,25 +213,42 @@ def get_stomata(max_proj_image, max_obj_size=1000, min_obj_size=200):
     obj_slices = ndimage.find_objects(stomata)
     return [obj_slices, big_objs, stomata]
 
-def get_pore(img, margin=10):
-    """Extracts darkest region from subimage - in context presumed to be the pore. Inverts the image and finds the brightest region.
-    returns binary image in which pixels with value 1 are within margin percent of the image max. All other pixel
+def get_pore(img, percentile=75,edge_object_margin=1):
+    """Extracts largest, non-border, darkest region from subimage - in context presumed to be the pore. Works out the
     values are 0.
 
-    :param img: input image section
+    :param img: input image (section of full intensity leaf image with just stomate in it)
     :type img: numpy.ndarray
-    :param margin:  the percent of the inverted image maximum pixel value to take as the minimum pixel value for the pore
-    :type margin: int
+    :param percentile: the percentile of the intensity histogram below which values will be taken to be dark.
+    :type percentile: int
+    :param edge_object_margin: the width of border in which objects must lie to be removed as border objects, default = 1
     :return: binary numpy.ndaarray
     """
+    dark_level = np.percentile(img, percentile )
+    print("dark level is {}".format(dark_level))
+    print("percentile is {}".format(percentile))
+    #imshow(img)
+    cp = np.copy(img)
+    cp[img > dark_level] = 0
+    cp[img <= dark_level] = 1
+    label_objects, nb_labels = ndimage.label(cp)
+    removed = np.copy(label_objects)
+    for o in edge_objects(label_objects, margin=edge_object_margin):
+        removed[removed == o] = 0
+    new_label_objects, new_nb_labels = ndimage.label(removed)
+    props = measure.regionprops(new_label_objects, intensity_image=img)
+    if len(props) > 0:
+        area = max([i.area for i in props])
+        biggest = [i for i, j in enumerate(props) if j.area == area]
 
-    inv = img.max() - img
-    min_val = inv.max() - ((inv.max() / 100.0) * margin)
-    p = np.copy(inv)
-    p[p<min_val] = 0
-    p = ndimage.binary_fill_holes(p).astype('uint16')
-    return p
-
+        index_of_obj_to_keep = biggest[0]
+        label_of_obj_to_keep = np.arange(1, new_nb_labels + 1)[index_of_obj_to_keep]
+        new_label_objects[new_label_objects != label_of_obj_to_keep] = 0
+        final_label_objects, final_nb_labels = ndimage.label(new_label_objects)
+        print("final is: {}".format(final_label_objects))
+        return(final_label_objects)
+    else: #no pore
+        return(None)
 
 def get_stomata_info(stomata):
     l = ndimage.find_objects(stomata)
@@ -250,7 +281,11 @@ def rescale_intensity(img, val=None):
 def clip(img, range):
     return exposure.rescale_intensity(img, in_range=range)
 
+def report_header():
+    return ",".join(["Treatment", "PlateRow","PlateColumn","TimeStamp","XUnits", "XUnitsPerPixel", "YUnits", "YUnitsPerPixel","Stack","ObjectCount", "ImageStomateIndex", "StomateArea","StomateRoundness", "StomateLength", "StomateWidth", "PoreLength", "PoreWidth"])
+
 def custom_report(flex, stomata):
+
     props = [str(x) for x in flex.sample_info()] + [str(flex.object_count()) ] + [str(x) for x in stomata.stoma_info() ]
     return ",".join(props)
 
@@ -258,17 +293,23 @@ class GetStomataObjects(object):
     """Gets list of LeafImage objects from a list of flex file names. Each file name provided returns a
     different LeafImage object. Each LeafImage object has an attribute `stomata_objects` that contains stomata information
 
-    >>> analysed_flex_files = sd.GetStomataObjects(flex_file_names, image_options=[])
+    >>> analysed_flex_files = sd.GetStomataObjects(flex_file_names, image_options=[], segment_options = [] )
 
     """
 
-    def __init__(self, flex_file_name_list, max_obj_size = 1000, min_obj_size = 200, image_options=[]):
-        self.flex_files = flex_file_name_list
-        self.opts = image_options
-        self.processed_images = self.process_images( max_obj_size, min_obj_size, image_options )
+    def __init__(self, flex_file_name_list, image_options=[], segment_options = [] ):
 
-    def process_images(self, max_obj_size, min_obj_size, image_options):
-        return [LeafImage(flex_file, max_obj_size, min_obj_size, image_options) for flex_file in self.flex_files]
+
+        self.flex_files = flex_file_name_list
+        self.image_opts = Qopts(image_options)
+        self.segment_opts = Qopts(segment_options)
+
+
+
+        self.processed_images = self.process_images()
+
+    def process_images(self):
+        return [LeafImage(flex_file, image_options = self.image_opts, segment_options = self.segment_opts ) for flex_file in self.flex_files]
 
     def __iter__(self):
         return iter(self.processed_images)
@@ -287,7 +328,7 @@ class LeafImage(object):
     :ivar stomata_objects: list of StomataObject's - one per detected stomate
     """
 
-    def __init__(self, flex_file, max_obj_size = 1000, min_obj_size = 200, image_options=[]):
+    def __init__(self, flex_file, image_options=[], segment_options = [] ):
 
         #if len(image_options) == 0:
         #    image_options = [('clip', (50,100))]
@@ -305,6 +346,7 @@ class LeafImage(object):
         self.y_units = None
         self.x_perpixel = None
         self.y_perpixel = None
+
 
         if flex_file.endswith('flex'):
             self.metadata = FlexMetaData(flex_file)
@@ -324,11 +366,11 @@ class LeafImage(object):
             elif func == 'gaussian':
                 self.mp = gaussian(self.mp, val)
             elif func == 'sharpen':
-                self.mp == sharpen(self.mp, val)
+                self.mp = sharpen(self.mp, val)
             elif func == 'median':
-                self.mp == median_denoise(self.mp,val)
+                self.mp = median_denoise(self.mp,val)
             elif func == 'log':
-                self.mp == log_transform(self.mp,val)
+                self.mp = log_transform(self.mp,val)
             elif func == 'adaptive':
                 self.mp = equalize_adapthist(self.mp, val)
             elif func == 'rescale':
@@ -338,15 +380,12 @@ class LeafImage(object):
 
         self.is_dark = is_dark_image(self.mp)
 
-        #if not self.is_dark:
-        stomata_data = get_stomata(self.mp, max_obj_size, min_obj_size)
+        stomata_data = get_stomata(self.mp, min_obj_size=segment_options.stomate_min_obj_size, max_obj_size=segment_options.stomate_max_obj_size)
         self.stomata_positions = stomata_data[0]
         self.binary_obj_img = stomata_data[1]
         self.stomata_labels = stomata_data[2]
-            #self.border_objects = edge_objects(self.stomata_labels)
         stomata_props = measure.regionprops(self.stomata_labels, intensity_image=self.mp)
-            #on_border = [x in self.border_objects for x in range(1, self.stomata_labels.max() + 1 )]
-        self.stomata_objects = [StomataObject(self.mp[stomata_pos[0]], stomata_pos[0], stomata_pos[1], self.binary_obj_img, stomata_pos[2] ) for stomata_pos in zip(self.stomata_positions, stomata_props, range(1, self.stomata_labels.max() + 1) )]
+        self.stomata_objects = [StomataObject(self.mp[stomata_pos[0]], stomata_pos[0], stomata_pos[1], self.binary_obj_img, stomata_pos[2], segment_options ) for stomata_pos in zip(self.stomata_positions, stomata_props, range(1, self.stomata_labels.max() + 1) )]
 
     def object_count(self):
         return len(self.stomata_objects)
@@ -369,14 +408,19 @@ class StomataObject(object):
 
     """
 
-    def __init__(self, max_proj_img_slice, stomata_pos, stomata_props, binary_obj_img,  label):
+    def __init__(self, max_proj_img_slice, stomata_pos, stomata_props, binary_obj_img,  label, segment_options):
+
         self.detected_stomate = binary_obj_img[stomata_pos].astype('uint16')
         self.intensity_image = max_proj_img_slice
         self.props = stomata_props
         self.label = label
         self.position_in_image = stomata_pos
-        self.pore_binary_image = get_pore(max_proj_img_slice)
-        self.pore_props = measure.regionprops(self.pore_binary_image)[0]
+        self.pore_binary_image = get_pore(self.intensity_image, segment_options.pore_percentile, segment_options.pore_edge_object_margin)
+        if self.pore_binary_image is not None:
+            print("FOUND a pore")
+            self.pore_props = measure.regionprops(self.pore_binary_image)[0] #should only be one object in the list
+        else:
+            self.pore_props = None
 
     def roundness(self):
         return 4 * math.pi * (self.props.area / (self.props.perimeter ** 2))
@@ -397,4 +441,21 @@ class StomataObject(object):
         return (math.pi * (a+b) * c)
 
     def stoma_info(self):
-        return [self.label, self.props.area, self.roundness(), self.props.major_axis_length, self.props.minor_axis_length ]
+        pore_width = None
+        pore_length = None
+        if self.pore_props is not None:
+            pore_width = self.pore_props.minor_axis_length
+            pore_length = self.pore_props.major_axis_length
+
+        return [self.label, self.props.area, self.roundness(), self.props.major_axis_length, self.props.minor_axis_length, str(pore_length), str(pore_width) ]
+
+
+class Qopts(object):
+    def __init__(self, itt):
+        for k,v in itt:
+            setattr(self,k,v)
+
+    def __iter__(self):
+        for attr, value in self.__dict__.items():
+            yield attr, value
+
