@@ -282,7 +282,7 @@ def clip(img, range):
     return exposure.rescale_intensity(img, in_range=range)
 
 def report_header():
-    return ",".join(["Treatment", "PlateRow","PlateColumn","TimeStamp","XUnits", "XUnitsPerPixel", "YUnits", "YUnitsPerPixel","Stack","ObjectCount", "ImageStomateIndex", "StomateArea","StomateRoundness", "StomateLength", "StomateWidth", "PoreLength", "PoreWidth"])
+    return ",".join(["Treatment", "PlateRow","PlateColumn","TimeStamp","XUnits", "XUnitsPerPixel", "YUnits", "YUnitsPerPixel","Stack","CameraBinningX", "CameraBinningY", ""ObjectCount", "ImageStomateIndex", "StomateArea","StomateRoundness", "StomateLength", "StomateWidth", "PoreLength", "PoreWidth"])
 
 def custom_report(flex, stomata):
 
@@ -346,6 +346,8 @@ class LeafImage(object):
         self.y_units = None
         self.x_perpixel = None
         self.y_perpixel = None
+        self.camerabinning_x = None
+        self.camerabinning_y = None
 
 
         if flex_file.endswith('flex'):
@@ -359,6 +361,8 @@ class LeafImage(object):
             self.y_units = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionY']['@Unit']
             self.y_perpixel = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['ImageResolutionY']['#text']
             self.stack = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['Sublayout']['#text']
+            self.camerabinning_x = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['CameraBinningX']['#text']
+            self.camerabinning_y = self.metadata.metadata[0]['Root']['FLEX']['Well']['Images']['Image'][0]['CameraBinningY']['#text']
 
         for func, val in image_options:
             if func == 'gamma':
@@ -391,7 +395,7 @@ class LeafImage(object):
         return len(self.stomata_objects)
 
     def sample_info(self):
-        return [self.treatment, self.plate_row, self.plate_column,  self.imaging_time, self.x_units, self.x_perpixel, self.y_units, self.y_perpixel, self.stack]
+        return [self.treatment, self.plate_row, self.plate_column,  self.imaging_time, self.x_units, self.x_perpixel, self.y_units, self.y_perpixel, self.stack, self.camerabinning_x, self.camerabinning_y]
 
 
 
