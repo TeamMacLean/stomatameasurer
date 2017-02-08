@@ -80,47 +80,47 @@ for flex in analysed_flex_files:
 
 
 
-![png](docs/readme_imgoutput_8_1.png)
+![png](docs/readme_img/output_8_1.png)
 
 
     11 511
 
 
 
-![png](docs/readme_imgoutput_8_3.png)
+![png](docs/readme_img/output_8_3.png)
 
 
 
-![png](docs/readme_imgoutput_8_4.png)
+![png](docs/readme_img/output_8_4.png)
 
 
     11 306
 
 
 
-![png](docs/readme_imgoutput_8_6.png)
+![png](docs/readme_img/output_8_6.png)
 
 
 
-![png](docs/readme_imgoutput_8_7.png)
+![png](docs/readme_img/output_8_7.png)
 
 
     12 471
 
 
 
-![png](docs/readme_imgoutput_8_9.png)
+![png](docs/readme_img/output_8_9.png)
 
 
 
-![png](docs/readme_imgoutput_8_10.png)
+![png](docs/readme_img/output_8_10.png)
 
 
     23 615
 
 
 
-![png](docs/readme_imgoutput_8_12.png)
+![png](docs/readme_img/output_8_12.png)
 
 
 ## 2.2 Apply image processing steps
@@ -167,47 +167,47 @@ for flex in analysed_flex_files:
 
 
 
-![png](docs/readme_imgoutput_10_1.png)
+![png](docs/readme_img/output_10_1.png)
 
 
     0 65535
 
 
 
-![png](docs/readme_imgoutput_10_3.png)
+![png](docs/readme_img/output_10_3.png)
 
 
 
-![png](docs/readme_imgoutput_10_4.png)
-
-
-    0 65535
-
-
-
-![png](docs/readme_imgoutput_10_6.png)
-
-
-
-![png](docs/readme_imgoutput_10_7.png)
+![png](docs/readme_img/output_10_4.png)
 
 
     0 65535
 
 
 
-![png](docs/readme_imgoutput_10_9.png)
+![png](docs/readme_img/output_10_6.png)
 
 
 
-![png](docs/readme_imgoutput_10_10.png)
+![png](docs/readme_img/output_10_7.png)
 
 
     0 65535
 
 
 
-![png](docs/readme_imgoutput_10_12.png)
+![png](docs/readme_img/output_10_9.png)
+
+
+
+![png](docs/readme_img/output_10_10.png)
+
+
+    0 65535
+
+
+
+![png](docs/readme_img/output_10_12.png)
 
 
 ## 3 Work with objects
@@ -225,47 +225,47 @@ for flex in analysed_flex_files:
 ```
 
 
-![png](docs/readme_imgoutput_12_0.png)
+![png](docs/readme_img/output_12_0.png)
 
 
     16
 
 
 
-![png](docs/readme_imgoutput_12_2.png)
+![png](docs/readme_img/output_12_2.png)
 
 
 
-![png](docs/readme_imgoutput_12_3.png)
+![png](docs/readme_img/output_12_3.png)
 
 
     9
 
 
 
-![png](docs/readme_imgoutput_12_5.png)
+![png](docs/readme_img/output_12_5.png)
 
 
 
-![png](docs/readme_imgoutput_12_6.png)
+![png](docs/readme_img/output_12_6.png)
 
 
     21
 
 
 
-![png](docs/readme_imgoutput_12_8.png)
+![png](docs/readme_img/output_12_8.png)
 
 
 
-![png](docs/readme_imgoutput_12_9.png)
+![png](docs/readme_img/output_12_9.png)
 
 
     0
 
 
 
-![png](docs/readme_imgoutput_12_11.png)
+![png](docs/readme_img/output_12_11.png)
 
 
 ### 3.2 Filter objects
@@ -291,35 +291,35 @@ for flex in analysed_flex_files:
 ```
 
 
-![png](docs/readme_imgoutput_14_0.png)
+![png](docs/readme_img/output_14_0.png)
 
 
 
-![png](docs/readme_imgoutput_14_1.png)
+![png](docs/readme_img/output_14_1.png)
 
 
 
-![png](docs/readme_imgoutput_14_2.png)
+![png](docs/readme_img/output_14_2.png)
 
 
 
-![png](docs/readme_imgoutput_14_3.png)
+![png](docs/readme_img/output_14_3.png)
 
 
 
-![png](docs/readme_imgoutput_14_4.png)
+![png](docs/readme_img/output_14_4.png)
 
 
 
-![png](docs/readme_imgoutput_14_5.png)
+![png](docs/readme_img/output_14_5.png)
 
 
 
-![png](docs/readme_imgoutput_14_6.png)
+![png](docs/readme_img/output_14_6.png)
 
 
 
-![png](docs/readme_imgoutput_14_7.png)
+![png](docs/readme_img/output_14_7.png)
 
 
 ## 4. Outputting stomata information
