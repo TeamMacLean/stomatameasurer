@@ -225,8 +225,6 @@ def get_pore(img, percentile=75,edge_object_margin=1):
     :return: binary numpy.ndaarray
     """
     dark_level = np.percentile(img, percentile )
-    print("dark level is {}".format(dark_level))
-    print("percentile is {}".format(percentile))
     #imshow(img)
     cp = np.copy(img)
     cp[img > dark_level] = 0
@@ -245,7 +243,6 @@ def get_pore(img, percentile=75,edge_object_margin=1):
         label_of_obj_to_keep = np.arange(1, new_nb_labels + 1)[index_of_obj_to_keep]
         new_label_objects[new_label_objects != label_of_obj_to_keep] = 0
         final_label_objects, final_nb_labels = ndimage.label(new_label_objects)
-        print("final is: {}".format(final_label_objects))
         return(final_label_objects)
     else: #no pore
         return(None)
@@ -421,7 +418,6 @@ class StomataObject(object):
         self.position_in_image = stomata_pos
         self.pore_binary_image = get_pore(self.intensity_image, segment_options.pore_percentile, segment_options.pore_edge_object_margin)
         if self.pore_binary_image is not None:
-            print("FOUND a pore")
             self.pore_props = measure.regionprops(self.pore_binary_image)[0] #should only be one object in the list
         else:
             self.pore_props = None

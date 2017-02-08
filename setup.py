@@ -6,10 +6,10 @@ def readme():
         return readme.read()
 
 setup(name='stomatadetector',
-      version='0.0.5dev',
+      version='0.0.6dev',
       description='Stomata detection from FLEX/TIFF fluorescent images',
       long_description=readme(),
-      url='https://github.com/TeamMacLean/stomatadetector',
+      url='https://github.com/TeamMacLean/stomatameasurer',
       classifiers=[
         'Development Status :: 3 - Alpha',
         'License :: OSI Approved :: MIT License',
