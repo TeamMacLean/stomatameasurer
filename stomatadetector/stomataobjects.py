@@ -279,7 +279,7 @@ def clip(img, range):
     return exposure.rescale_intensity(img, in_range=range)
 
 def report_header():
-    return ",".join(["Treatment", "PlateRow","PlateColumn","TimeStamp","XUnits", "XUnitsPerPixel", "YUnits", "YUnitsPerPixel","Stack","CameraBinningX", "CameraBinningY", ""ObjectCount", "ImageStomateIndex", "StomateArea","StomateRoundness", "StomateLength", "StomateWidth", "PoreLength", "PoreWidth"])
+    return ",".join(["Treatment", "PlateRow","PlateColumn","TimeStamp","XUnits", "XUnitsPerPixel", "YUnits", "YUnitsPerPixel","Stack","CameraBinningX", "CameraBinningY", "ObjectCount", "ImageStomateIndex", "StomateArea","StomateRoundness", "StomateLength", "StomateWidth", "PoreLength", "PoreWidth"])
 
 def custom_report(flex, stomata):
 
