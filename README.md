@@ -276,8 +276,7 @@ Now we can filter objects based on their properties. This is done with the `sd.s
 ```python
 obj_filter = [
         ('delete_border_objects', True),
-        ('max_area', 1000),
-        ('min_area', 200),
+        ('size_range', (200, 1000) ),
         ('roundness', 0.65),
         ('width_length', 3)
     

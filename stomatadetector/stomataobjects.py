@@ -120,6 +120,14 @@ def not_round_objects(leaf_image_obj, roundness=0.65):
     """"""
     return [x.label for x in leaf_image_obj.stomata_objects if x.roundness() < roundness]
 
+def outsize_objects(leaf_image_obj, range_tuple):
+    min_size, max_size = range_tuple
+    return [x.label for x in leaf_image_obj.stomata_objects if (x.area < min_size or x.area > max_size)]
+
+def delete_by_size(leaf_image_obj, range_tuple):
+    outsize_obj = outsize_objects(leaf_image_obj, range_tuple)
+    delete_objects(leaf_image_obj, outsize_obj)
+
 def delete_not_round_objects(leaf_image_obj, roundness=0.65):
     not_round_obj = not_round_objects(leaf_image_obj, roundness)
     delete_objects(leaf_image_obj, not_round_obj)
